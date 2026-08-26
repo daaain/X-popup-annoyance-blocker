@@ -132,5 +132,63 @@ if (await loginLink.count()) {
 }
 
 await context.close();
+
+// ---------------------------------------------------------------- scenario 4
+// Mobile: the "Get the full app experience" obstruction modal must be gone,
+// the page must scroll, and tweet links must not be poisoned with
+// m.x.com / launch_app_store app redirects.
+const mctx = await launch({ withExtension: true, mobile: true });
+const mpage = mctx.pages()[0] ?? (await mctx.newPage());
+await mpage.goto('https://x.com/exolabs', { waitUntil: 'domcontentloaded', timeout: 90000 });
+await mpage.waitForTimeout(6000);
+
+const m1 = await mpage.evaluate(() => ({
+  obstruction: !!document.querySelector('[data-interaction*="app-store-obstruction"]'),
+  dialogs: document.querySelectorAll('[role="dialog"]').length,
+  poisoned: [...document.querySelectorAll('a[href]')].filter((a) =>
+    /launch_app_store|^https:\/\/m\.(x|twitter)\.com\//.test(a.getAttribute('href') || '')
+  ).length,
+}));
+check('mobile: app obstruction popup removed', !m1.obstruction && m1.dialogs === 0, `dialogs=${m1.dialogs}`);
+check('mobile: no poisoned app links', m1.poisoned === 0, `${m1.poisoned} poisoned`);
+
+// mouse.wheel is inert under Playwright's touch emulation, so assert
+// scrollability directly: no overflow lock and a working scroll.
+await mpage.evaluate(() => window.scrollTo(0, 1200));
+await mpage.waitForTimeout(1000);
+await mpage.evaluate(() => window.scrollTo(0, 2400));
+await mpage.waitForTimeout(3000); // give the post-scroll popup a chance to appear
+const m2 = await mpage.evaluate(() => ({
+  scrollY: window.scrollY,
+  htmlOverflow: getComputedStyle(document.documentElement).overflow,
+  bodyOverflow: getComputedStyle(document.body).overflow,
+  obstruction: !!document.querySelector('[data-interaction*="app-store-obstruction"]'),
+}));
+check(
+  'mobile: page scrolls (no overflow lock)',
+  m2.scrollY > 0 && m2.htmlOverflow !== 'hidden' && m2.bodyOverflow !== 'hidden',
+  `scrollY=${m2.scrollY} html=${m2.htmlOverflow} body=${m2.bodyOverflow}`
+);
+check('mobile: post-scroll popup also gone', !m2.obstruction);
+await mpage.screenshot({ path: path.join(ARTIFACTS, 'e2e-4-mobile-clean.png') });
+
+// Tapping a tweet must open the post on x.com, not bounce to the app store.
+const tweet = mpage.locator('a[href*="/status/"]').first();
+if (await tweet.count()) {
+  const href = await tweet.getAttribute('href');
+  await tweet.click({ timeout: 8000 }).catch((e) => console.log('tap failed:', e.message.split('\n')[0]));
+  await mpage.waitForTimeout(4000);
+  const url = mpage.url();
+  check(
+    'mobile: tapping a tweet stays on x.com',
+    /https:\/\/x\.com\/.+\/status\//.test(url) && !/launch_app_store|m\.x\.com/.test(url),
+    `href=${href} -> ${url}`
+  );
+  await mpage.screenshot({ path: path.join(ARTIFACTS, 'e2e-4-mobile-status.png') });
+} else {
+  console.log('SKIP  no tweet link found on mobile profile');
+}
+await mctx.close();
+
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

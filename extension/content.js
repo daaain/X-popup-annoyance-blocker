@@ -71,7 +71,7 @@
   ].join(', ');
 
   const ANNOYANCE_TEXT =
-    /\b(open (the )?app|switch to the app|use the app|get the app|not on x yet|don.t miss what.s happening|see what.s happening|people on x are the first to know)\b/i;
+    /\b(open (the )?app|switch to the app|use the app|get the (full )?app|full app experience|not on x yet|don.t miss what.s happening|see what.s happening|people on x are the first to know)\b/i;
 
   const CLOSE_BUTTON_SELECTORS = [
     '[data-testid="app-bar-close"]',
@@ -82,6 +82,11 @@
   const COOKIE_REFUSE_TEXT = /refuse non-essential cookies/i;
 
   function isAnnoyanceDialog(dialog) {
+    // Mobile "Get the full app experience" modal — X's own code calls it an
+    // obstruction (data-interaction="app-store-obstruction").
+    if (/app-store-obstruction/.test(dialog.getAttribute('data-interaction') || '')) return true;
+    if (dialog.querySelector('[data-interaction*="app-store-obstruction"]')) return true;
+    if (dialog.querySelector('a[href*="launch_app_store"]')) return true;
     const ariaLabel = dialog.getAttribute('aria-label') || '';
     if (/\b(log ?in|sign ?up)\b/i.test(ariaLabel)) return true;
     if (dialog.querySelector(LEGACY_ANNOYANCE_SELECTORS)) return true;
@@ -165,6 +170,21 @@
     attempts.set(dialog, tried + 1);
     dismissedSomething = true;
 
+    // The mobile app-install obstruction has no meaningful state to unwind
+    // (and its "unclosable" variant ignores Escape) — remove it outright.
+    if (
+      /app-store-obstruction/.test(dialog.getAttribute('data-interaction') || '') ||
+      dialog.querySelector('[data-interaction*="app-store-obstruction"]')
+    ) {
+      // The wrapper carries its own backdrop, so removing just the dialog
+      // element is complete — and safer than walking up to a body-level
+      // container, in case it isn't rendered through a portal.
+      log('removing app-store obstruction');
+      dialog.remove();
+      restoreScroll();
+      return;
+    }
+
     // Cookie banner: click "Refuse non-essential cookies" so the choice
     // persists and the banner never returns.
     for (const btn of dialog.querySelectorAll('[role="button"], button')) {
@@ -200,8 +220,61 @@
     return sinceGesture >= 1500 && isJetfuelPage();
   }
 
+  // ------------------------------------------------------------- app links —
+  // On the mobile page, tweet links are poisoned so a tap opens the app or
+  // app store instead of the post:
+  //   https://m.x.com/<user>/status/<id>?launch_app_store=true&ct=...
+  // Rewrite them back to plain x.com URLs.
+  function cleanUrl(href) {
+    let url;
+    try {
+      url = new URL(href, location.href);
+    } catch {
+      return null;
+    }
+    let changed = false;
+    if (url.hostname === 'm.x.com' || url.hostname === 'm.twitter.com') {
+      url.hostname = url.hostname === 'm.x.com' ? 'x.com' : 'twitter.com';
+      changed = true;
+    }
+    for (const param of ['launch_app_store', 'ct']) {
+      if (url.searchParams.has(param)) {
+        url.searchParams.delete(param);
+        changed = true;
+      }
+    }
+    return changed ? url.href : null;
+  }
+
+  function cleanAppLinks(root) {
+    for (const a of root.querySelectorAll(
+      'a[href*="launch_app_store"], a[href^="https://m.x.com/"], a[href^="https://m.twitter.com/"]'
+    )) {
+      const cleaned = cleanUrl(a.getAttribute('href'));
+      if (cleaned) {
+        log('cleaning app link', a.getAttribute('href'));
+        a.setAttribute('href', cleaned);
+      }
+    }
+  }
+
+  // Safety net for hrefs poisoned at tap time: fix the link during the
+  // capture phase, before the page's own handlers read it.
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const a = e.target.closest('a[href]');
+      if (!a) return;
+      const cleaned = cleanUrl(a.getAttribute('href'));
+      if (cleaned) a.setAttribute('href', cleaned);
+    },
+    true
+  );
+
   // ------------------------------------------------------------------- scan —
   function scan() {
+    cleanAppLinks(document);
     for (const dialog of document.querySelectorAll(
       '[role="dialog"], [data-testid="sheetDialog"], [data-testid="confirmationSheetDialog"]'
     )) {
@@ -249,7 +322,7 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['style', 'data-open'],
+      attributeFilter: ['style', 'data-open', 'data-state', 'href'],
     });
     scan();
     log('watching for popups');

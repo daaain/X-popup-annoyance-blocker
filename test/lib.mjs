@@ -14,10 +14,12 @@ export const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const ARTIFACTS = path.join(ROOT, 'test', 'artifacts');
 export const EXTENSION_DIR = path.join(ROOT, 'extension');
 
-const UA =
+const DESKTOP_UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+const MOBILE_UA =
+  'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36';
 
-export async function launch({ withExtension = false, userDataDir } = {}) {
+export async function launch({ withExtension = false, mobile = false, userDataDir } = {}) {
   await mkdir(ARTIFACTS, { recursive: true });
   const args = ['--disable-blink-features=AutomationControlled'];
   if (withExtension) {
@@ -32,8 +34,10 @@ export async function launch({ withExtension = false, userDataDir } = {}) {
       args,
       executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
       headless: true,
-      viewport: { width: 1280, height: 900 },
-      userAgent: UA,
+      viewport: mobile ? { width: 412, height: 915 } : { width: 1280, height: 900 },
+      userAgent: mobile ? MOBILE_UA : DESKTOP_UA,
+      isMobile: mobile,
+      hasTouch: mobile,
       serviceWorkers: 'block',
       ignoreHTTPSErrors: true,
     }

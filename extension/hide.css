@@ -13,6 +13,13 @@ button.fixed[class~="z-1000"] {
   display: none !important;
 }
 
+/* Mobile: the "Get the full app experience" / "Open X" modal. X's own code
+   names it an obstruction. display:none also takes it out of hit-testing so
+   it stops blocking scrolling even before content.js removes it. */
+[data-interaction="app-store-obstruction"] {
+  display: none !important;
+}
+
 /* Legacy React app: "Don't miss what's happening" / "Log in / Sign up"
    bottom bar shown to logged-out visitors. */
 [data-testid="BottomBar"] {

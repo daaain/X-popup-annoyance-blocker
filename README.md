@@ -27,6 +27,18 @@ x.com currently serves two different frontends, and the extension handles both:
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.
 
+**Mobile browser (logged out)** — the worst offenders:
+
+- The **"Get the full app experience" / "Open X" modal** — both the closable
+  on-load variant and the non-closable post-scroll variant. X's own markup
+  labels it `data-interaction="app-store-obstruction"`, which is the hook
+  used to hide it instantly and remove it.
+- **Poisoned tweet links**: on mobile, post links point at
+  `m.x.com/...?launch_app_store=true&ct=...`, so tapping a tweet bounces you
+  into the app / app store instead of opening the post. The extension
+  rewrites these back to plain `x.com` URLs (in the DOM, plus a
+  capture-phase click guard for links poisoned at tap time).
+
 **Legacy React app** (still served when logged in and in some buckets):
 
 - `sheetDialog` sign-up / open-the-app sheets (closed via their close button,
@@ -99,7 +111,11 @@ and drives the real, logged-out x.com. It asserts that:
    element-hiding filters);
 3. dialogs opened by a genuine click on a "Log in" control survive, while
    dialogs hijacking other clicks are dismissed, and the real login page
-   stays reachable.
+   stays reachable;
+4. mobile (Android UA emulation): the "Get the full app experience"
+   obstruction modal is removed (on load and after scrolling), the page
+   scrolls, no `launch_app_store` / `m.x.com` poisoned links remain, and
+   tapping a tweet opens the post on x.com instead of the app store.
 
 Screenshots and DOM dumps land in `test/artifacts/`.
 
@@ -120,7 +136,12 @@ utility classes, Base UI dialogs, **no** `data-testid` attributes, no
 - login modal: portal `div[role="dialog"]` (e.g. `aria-label="Log in to X"`),
   scroll-locked via inline `overflow: hidden` on `<body>`; a trusted `Escape`
   keydown closes it and X restores the scroll-lock itself — DOM removal +
-  manual unlock is the fallback.
+  manual unlock is the fallback;
+- mobile app nag: `div[role="dialog"][data-interaction="app-store-obstruction"]`
+  (backdrop and panel carry `…-backdrop` / `…-panel`), removed directly since
+  the wrapper contains its own backdrop;
+- poisoned mobile links: `a[href*="launch_app_store"]` and `https://m.x.com/…`
+  hrefs, rewritten to `x.com` with `launch_app_store` / `ct` params stripped.
 
 The legacy React app keeps the old `data-testid` hooks
 (`sheetDialog`, `BottomBar`, `app-bar-close`, `#layers`, …).
