@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "X Popup Annoyance Blocker",
+  "version": "1.0.0",
+  "description": "Dismisses the sign-up / log-in / install-the-app popups that x.com forces on (mostly logged-out) visitors, and restores page scrolling afterwards.",
+  "homepage_url": "https://github.com/daaain/X-popup-annoyance-blocker",
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://x.com/*",
+        "*://*.x.com/*",
+        "*://twitter.com/*",
+        "*://*.twitter.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "hide.css"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "x-popup-annoyance-blocker@danieldemmel.me",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}

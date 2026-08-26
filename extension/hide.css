@@ -1,0 +1,25 @@
+/* Elements that are always annoyances — hidden via CSS so they never flash.
+   Ambiguous elements (dialogs that might be user-requested) are handled by
+   content.js, which inspects context before acting. */
+
+/* Logged-out server-rendered page ("jetfuel"): the fixed "Continue to X"
+   content wall at the bottom of the timeline, and the floating
+   "Scan to get the app" QR popup. These Tailwind-style utility classes do
+   not collide with the legacy React app's generated class names. */
+aside.fixed.bottom-0 {
+  display: none !important;
+}
+button.fixed[class~="z-1000"] {
+  display: none !important;
+}
+
+/* Legacy React app: "Don't miss what's happening" / "Log in / Sign up"
+   bottom bar shown to logged-out visitors. */
+[data-testid="BottomBar"] {
+  display: none !important;
+}
+
+/* Google "Sign in with Google" one-tap iframe popup. */
+iframe[src*="accounts.google.com/gsi/"] {
+  display: none !important;
+}
