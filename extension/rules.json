@@ -1,0 +1,52 @@
+[
+  {
+    "id": 1,
+    "priority": 2,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "transform": {
+          "host": "x.com",
+          "queryTransform": { "removeParams": ["launch_app_store", "ct", "mx"] }
+        }
+      }
+    },
+    "condition": {
+      "urlFilter": "||m.x.com^",
+      "resourceTypes": ["main_frame"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 2,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "transform": {
+          "host": "twitter.com",
+          "queryTransform": { "removeParams": ["launch_app_store", "ct", "mx"] }
+        }
+      }
+    },
+    "condition": {
+      "urlFilter": "||m.twitter.com^",
+      "resourceTypes": ["main_frame"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "transform": {
+          "queryTransform": { "removeParams": ["launch_app_store", "ct", "mx"] }
+        }
+      }
+    },
+    "condition": {
+      "urlFilter": "launch_app_store",
+      "resourceTypes": ["main_frame"]
+    }
+  }
+]

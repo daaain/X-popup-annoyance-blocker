@@ -6,10 +6,30 @@ sign-up / log-in modals and install-the-app nags — and restores page
 scrolling afterwards.
 
 Just hiding these popups with an element-hiding filter (e.g. uBlock Origin)
-leaves the page broken, because X locks scrolling with `overflow: hidden`
-while the popup is "open". This extension dismisses the popups through the
-page's own mechanisms where possible and cleans up the scroll-lock itself
-where not.
+leaves the page broken, because X locks scrolling while the popup is "open".
+This extension dismisses the popups through the page's own mechanisms where
+possible, and — more importantly — *forces* the page to stay scrollable
+rather than trying to guess which lock X used this time.
+
+### How scrolling is restored
+
+X freezes the page in several different ways: an inline `overflow: hidden`,
+a utility class doing the same, `position: fixed` on `<body>` with a negative
+offset, and `touch-action: none`. Chasing each variant is a losing game, so
+`hide.css` ships `!important` unlock rules keyed on an `.xpab-unlock` class
+that `content.js` keeps on `<html>` at all times — except while a dialog you
+actually asked for is open. `!important` beats both inline styles and utility
+classes, so new lock variants are neutralised without a code change.
+
+Only the root element is allowed to become the scroll container: forcing
+`overflow-y: auto` on `<body>` as well turns the body into its own scrollbox
+and silently stops the window scrolling altogether. (The live test caught
+exactly that regression.)
+
+Everything runs on a repeating `heal()` pass (every 500 ms, plus a
+MutationObserver and navigation events), because X re-applies locks and
+re-poisons links after hydration and on client-side navigation — sometimes
+without any mutation worth observing.
 
 ## What it blocks
 
@@ -57,6 +77,28 @@ response to clicks on unrelated things (a post, Like, Follow, …).
 Intent detection matches English labels plus login/signup URLs; on a
 non-English UI a deliberately opened login *dialog* may still get dismissed
 in rare cases — you can always log in via `x.com/i/flow/login` directly.
+
+## Cookie banner (EU/UK only)
+
+The consent banner is geo-gated, so it cannot be reproduced from a US-based
+test runner — it is handled defensively rather than against captured markup:
+any container mentioning cookies gets its "Refuse non-essential cookies" /
+"Reject" / "Only necessary" control clicked (which persists the choice), and
+if no such control is recognised the banner is removed so it at least stops
+covering the page. Critically, an un-dismissed banner can no longer block
+scroll healing — that single bug (scroll repair bailed out whenever *any*
+`[role="dialog"]` was present) made the extension useless on mobile in the
+EU, since the banner is a dialog.
+
+## Diagnostics from a phone
+
+No console, USB cable or remote debugging needed: append `#xpab-debug` to any
+x.com URL in the address bar, e.g. `x.com/exolabs#xpab-debug`. A small badge
+appears bottom-left showing counters (dialogs / nags / links / cookie actions)
+and whether scrolling is `UNLOCKED`, plus a **COPY REPORT** button that copies
+a JSON dump — page URL, user agent, computed overflow state, and the markup of
+every overlay still on screen — so an unhandled popup can be reported exactly.
+(`localStorage.setItem('xpab-debug','1')` does the same persistently.)
 
 ## Install
 
@@ -117,6 +159,16 @@ and drives the real, logged-out x.com. It asserts that:
    scrolls, no `launch_app_store` / `m.x.com` poisoned links remain, and
    tapping a tweet opens the post on x.com instead of the app store.
 
+`npm run test:synthetic` additionally runs `test/fixture.mjs` — a synthetic
+x.com-shaped page reproducing the failure modes the live site won't show a US
+test runner: the EU cookie banner, a scroll lock applied by utility *class*,
+the `position: fixed` body lock, an SPA that re-applies the lock every 700 ms,
+and a tweet link whose own `onclick` navigates to the app store. It runs in
+**both Chromium and Firefox** (Gecko matters: the phone runs Firefox, and only
+Chromium had ever been tested). Playwright cannot install extensions into
+Firefox, so there the content script and stylesheet are injected at
+`document_start`; the packaging itself is validated by `web-ext lint`.
+
 Screenshots and DOM dumps land in `test/artifacts/`.
 
 Sandbox note: this repo was developed in a VM whose egress proxy resets
@@ -145,3 +197,13 @@ utility classes, Base UI dialogs, **no** `data-testid` attributes, no
 
 The legacy React app keeps the old `data-testid` hooks
 (`sheetDialog`, `BottomBar`, `app-bar-close`, `#layers`, …).
+
+### Why link de-poisoning is also a network rule
+
+Rewriting `href`s (on scan, and in a capture-phase handler on
+`touchstart`/`pointerdown`/`mousedown`/`click`) is not sufficient on its own:
+the page's own `onclick` can navigate using a URL the handler already holds.
+`rules.json` therefore also strips the redirect at the network layer via
+`declarativeNetRequest` — `m.x.com` → `x.com` and `launch_app_store`/`ct`/`mx`
+params removed on main-frame navigations — which works no matter how the
+navigation was started.

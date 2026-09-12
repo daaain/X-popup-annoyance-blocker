@@ -8,7 +8,9 @@
     "icons": "node scripts/make-icons.mjs",
     "build": "web-ext build --source-dir extension --artifacts-dir dist --overwrite-dest",
     "test": "node test/e2e.mjs",
-    "lint": "web-ext lint --source-dir extension"
+    "lint": "web-ext lint --source-dir extension",
+    "test:synthetic": "node test/synthetic.mjs",
+    "test:all": "node test/synthetic.mjs && node test/e2e.mjs"
   },
   "devDependencies": {
     "playwright": "^1.49.0",

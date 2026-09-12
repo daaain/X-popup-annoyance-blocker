@@ -65,11 +65,23 @@ const s2 = await page.evaluate(() => ({
 check('spontaneous dialog removed', !s2.dialog);
 check('scroll-lock lifted', s2.bodyOverflow !== 'hidden', `body overflow: "${s2.bodyOverflow}"`);
 
+// Scroll to the top and back down, so the assertion doesn't depend on how
+// much timeline content happens to be loaded (a wheel at the bottom of the
+// document moves nothing even when scrolling is perfectly healthy).
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.waitForTimeout(500);
 const scroll2a = await page.evaluate(() => window.scrollY);
-await page.mouse.wheel(0, 600);
-await page.waitForTimeout(800);
-const scroll2b = await page.evaluate(() => window.scrollY);
-check('page scrolls after unlock', scroll2b !== scroll2a, `scrollY ${scroll2a} -> ${scroll2b}`);
+await page.evaluate(() => window.scrollTo(0, 900));
+await page.waitForTimeout(500);
+const scroll2b = await page.evaluate(() => ({
+  y: window.scrollY,
+  htmlOverflowY: getComputedStyle(document.documentElement).overflowY,
+}));
+check(
+  'page scrolls after unlock',
+  scroll2a === 0 && scroll2b.y > 0 && scroll2b.htmlOverflowY !== 'hidden',
+  `scrollY ${scroll2a} -> ${scroll2b.y}, html overflow-y=${scroll2b.htmlOverflowY}`
+);
 await page.screenshot({ path: path.join(ARTIFACTS, 'e2e-2-after-unlock.png') });
 
 // ---------------------------------------------------------------- scenario 3

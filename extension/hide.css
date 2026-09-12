@@ -1,11 +1,18 @@
-/* Elements that are always annoyances — hidden via CSS so they never flash.
-   Ambiguous elements (dialogs that might be user-requested) are handled by
+/* Static annoyances, hidden at document_start so they never flash.
+   Anything ambiguous (dialogs that might be user-requested) is left to
    content.js, which inspects context before acting. */
 
-/* Logged-out server-rendered page ("jetfuel"): the fixed "Continue to X"
-   content wall at the bottom of the timeline, and the floating
-   "Scan to get the app" QR popup. These Tailwind-style utility classes do
-   not collide with the legacy React app's generated class names. */
+/* Mobile: "Get the full app experience" / "Open X" modal. X's own markup
+   calls it an obstruction. Hiding it also removes it from hit-testing, so it
+   stops swallowing taps and scrolls even before content.js removes it. */
+[data-interaction="app-store-obstruction"],
+[data-interaction="app-store-obstruction-backdrop"],
+[data-interaction="app-store-obstruction-panel"] {
+  display: none !important;
+}
+
+/* Logged-out server-rendered page: fixed "Continue to X" content wall and
+   the floating "Scan to get the app" QR popup. */
 aside.fixed.bottom-0 {
   display: none !important;
 }
@@ -13,20 +20,55 @@ button.fixed[class~="z-1000"] {
   display: none !important;
 }
 
-/* Mobile: the "Get the full app experience" / "Open X" modal. X's own code
-   names it an obstruction. display:none also takes it out of hit-testing so
-   it stops blocking scrolling even before content.js removes it. */
-[data-interaction="app-store-obstruction"] {
-  display: none !important;
-}
-
-/* Legacy React app: "Don't miss what's happening" / "Log in / Sign up"
-   bottom bar shown to logged-out visitors. */
+/* Legacy React app: "Don't miss what's happening" bottom bar. */
 [data-testid="BottomBar"] {
   display: none !important;
 }
 
-/* Google "Sign in with Google" one-tap iframe popup. */
+/* Google "Sign in with Google" one-tap popup. */
 iframe[src*="accounts.google.com/gsi/"] {
   display: none !important;
+}
+
+/* ------------------------------------------------------------------------
+   Scroll unlock.
+
+   X disables scrolling while a popup is "open" by setting overflow:hidden
+   (inline or via a utility class) on <html>/<body>, and sometimes
+   position:fixed or touch-action:none. Removing the popup alone leaves the
+   page frozen — the exact failure that makes element-hiding filters useless
+   here.
+
+   content.js puts .xpab-unlock on <html> whenever no dialog the user
+   actually asked for is open. These !important rules then beat both inline
+   styles and utility classes, so we do not need to know which mechanism X
+   used, now or after their next redesign.
+   ------------------------------------------------------------------------ */
+/* Only the ROOT element may become the scroll container. Forcing
+   overflow-y:auto on <body> as well makes the body its own scrollbox, which
+   silently stops the window from scrolling at all — caught by the live test,
+   so leave <body> at overflow:visible and let content overflow to the root. */
+html.xpab-unlock {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  touch-action: auto !important;
+  overscroll-behavior: auto !important;
+}
+
+html.xpab-unlock > body {
+  overflow: visible !important;
+  touch-action: auto !important;
+  overscroll-behavior: auto !important;
+}
+
+/* position:fixed on <body> is the other scroll-lock technique; content.js
+   restores the saved offset when it clears this. */
+html.xpab-unlock > body {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  width: auto !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
 }
