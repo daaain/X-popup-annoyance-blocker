@@ -5,8 +5,10 @@
 //  - Logged-out visitors get a server-rendered page (utility CSS classes,
 //    Base UI dialogs, no #react-root). Annoyances: a "Continue to X" content
 //    wall, a "Scan to get the app" QR popup, a login modal, a cookie banner,
-//    and on mobile a "Get the full app experience" app-store obstruction plus
-//    tweet links rewritten to bounce into the app store.
+//    clicks on posts hijacked to show a "Don't miss what's happening"
+//    engagement modal, and on mobile a "Get the full app experience"
+//    app-store obstruction plus tweet links rewritten to bounce into the app
+//    store.
 //  - The classic React app (#react-root, data-testid) when logged in.
 //
 // Design notes, learned the hard way:
@@ -260,6 +262,43 @@
     }
   }
 
+  // ------------------------------------------------------- post clicks —
+  // Logged out, X cancels clicks on a post (its date or its body, the whole
+  // card being a [role="link"][data-href]) and shows the engagement modal
+  // instead of opening it. Open the post ourselves, before X's handlers see
+  // the click. Buttons (Like, Reply, ...), media and other links inside the
+  // card are left to X.
+  const POST_PATH_RE = /^\/[^/]+\/status\/\d+/;
+  const CLICKABLE_SELECTOR =
+    'a[href], [role="link"][data-href], button, [role="button"], video, input, textarea, select, label';
+
+  function postUrlFor(target) {
+    const clickable = target.closest(CLICKABLE_SELECTOR);
+    if (!clickable) return null;
+    const href = clickable.getAttribute('href') ?? clickable.getAttribute('data-href');
+    if (!href) return null;
+    let url;
+    try {
+      url = new URL(cleanUrl(href) ?? href, location.href);
+    } catch {
+      return null;
+    }
+    return url.origin === location.origin && POST_PATH_RE.test(url.pathname) ? url : null;
+  }
+
+  function openPostDirectly(e) {
+    if (!e.isTrusted || e.defaultPrevented || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // new tab etc.: browser default
+    if (!isJetfuelPage() || !(e.target instanceof Element)) return;
+    if (!window.getSelection().isCollapsed) return; // the user was selecting text
+    const url = postUrlFor(e.target);
+    if (!url || url.pathname === location.pathname) return;
+    log('opening post directly', url.pathname);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    location.assign(url.href);
+  }
+
   // ------------------------------------------------------------ dismissal —
   const attempts = new WeakMap();
 
@@ -349,7 +388,7 @@
     if (!document.body) return;
 
     for (const dialog of document.querySelectorAll(
-      '[role="dialog"], [aria-modal="true"], [data-testid="sheetDialog"], [data-testid="confirmationSheetDialog"]'
+      '[role="dialog"], [aria-modal="true"], [data-engagement-modal], [data-testid="sheetDialog"], [data-testid="confirmationSheetDialog"]'
     )) {
       if (keptDialogs.has(dialog)) continue;
       if (shouldDismiss(dialog)) dismissDialog(dialog);
@@ -485,6 +524,9 @@
     document.addEventListener(type, recordGesture, true);
     document.addEventListener(type, guardTap, true);
   }
+  // On window, in the capture phase: the earliest point any page script can
+  // see the click.
+  window.addEventListener('click', openPostDirectly, true);
 
   new MutationObserver(scheduleHeal).observe(document.documentElement, {
     childList: true,

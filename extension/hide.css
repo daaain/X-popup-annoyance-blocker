@@ -20,6 +20,14 @@ button.fixed[class~="z-1000"] {
   display: none !important;
 }
 
+/* Logged-out page: "Don't miss what's happening" engagement modal, shown
+   instead of opening a clicked post. Never something the user asked for
+   (Log in / Sign up go to their own page), so hide it before it paints;
+   content.js then closes it properly. */
+[data-engagement-modal] {
+  display: none !important;
+}
+
 /* Legacy React app: "Don't miss what's happening" bottom bar. */
 [data-testid="BottomBar"] {
   display: none !important;

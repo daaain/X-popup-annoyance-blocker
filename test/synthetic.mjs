@@ -121,6 +121,30 @@ async function run(engine) {
   check(engine, 'tap does not reach app-store URL', !navs.some((u) => /launch_app_store|m\.x\.com/.test(u)),
     JSON.stringify(navs));
 
+  // Clicking a post must open it, not X's "Don't miss what's happening" modal.
+  for (const target of ['#reply-date', '#reply-body']) {
+    await page.goto('https://x.com/fixture', { timeout: 30000 });
+    await page.waitForTimeout(2000);
+    await page.click(target, { timeout: 5000 });
+    await page.waitForURL('**/someone/status/456', { timeout: 3000 }).catch(() => {});
+    check(engine, `clicking a post (${target}) opens it`,
+      new URL(page.url()).pathname === '/someone/status/456', page.url());
+  }
+
+  // Clicks X still hijacks (e.g. Like, which needs an account) must not leave
+  // the modal on screen.
+  await page.goto('https://x.com/fixture', { timeout: 30000 });
+  await page.waitForTimeout(2000);
+  await page.click('#reply-like', { timeout: 5000 });
+  await page.waitForTimeout(800);
+  const engagement = await page.evaluate(() => ({
+    shown: window.__fixture.engagementModals,
+    visible: [...document.querySelectorAll('[data-engagement-modal]')].some((m) => m.getClientRects().length > 0),
+  }));
+  check(engine, 'engagement modal dismissed', engagement.shown > 0 && !engagement.visible,
+    JSON.stringify(engagement));
+  check(engine, 'Like click does not navigate', new URL(page.url()).pathname === '/fixture', page.url());
+
   await page.screenshot({ path: path.join(ARTIFACTS, `synthetic-${engine}.png`) });
   await ctx.close();
   if (browser) await browser.close();
