@@ -32,7 +32,8 @@ export async function launch({ withExtension = false, mobile = false, userDataDi
     userDataDir ?? path.join(ARTIFACTS, `profile-${withExtension ? 'ext' : 'bare'}-${Date.now()}`),
     {
       args,
-      executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
+      executablePath: process.env.CHROMIUM_PATH || undefined,
+      channel: process.env.CHROMIUM_PATH ? undefined : 'chromium',
       headless: true,
       viewport: mobile ? { width: 412, height: 915 } : { width: 1280, height: 900 },
       userAgent: mobile ? MOBILE_UA : DESKTOP_UA,

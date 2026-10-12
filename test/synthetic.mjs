@@ -30,7 +30,9 @@ async function openPage(engine) {
       path.join(ARTIFACTS, `syn-chromium-${Date.now()}`),
       {
         headless: true,
-        executablePath: '/opt/pw-browsers/chromium',
+        // Defaults to Playwright's own Chromium; the sandbox VM sets CHROMIUM_PATH.
+        executablePath: process.env.CHROMIUM_PATH || undefined,
+        channel: process.env.CHROMIUM_PATH ? undefined : 'chromium',
         viewport: { width: 412, height: 915 },
         userAgent: MOBILE_UA,
         isMobile: true,
@@ -124,6 +126,7 @@ async function run(engine) {
   if (browser) await browser.close();
 }
 
-for (const engine of ['chromium', 'firefox']) await run(engine);
+const engines = (process.env.ENGINES ?? 'chromium,firefox').split(',');
+for (const engine of engines) await run(engine);
 console.log(failures ? `\n${failures} synthetic check(s) FAILED` : '\nall synthetic checks passed');
 process.exit(failures ? 1 : 0);
