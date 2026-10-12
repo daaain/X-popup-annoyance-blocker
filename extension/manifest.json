@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X Popup Annoyance Blocker",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Dismisses the sign-up / log-in / install-the-app popups that x.com forces on (mostly logged-out) visitors, and restores page scrolling afterwards.",
   "homepage_url": "https://github.com/daaain/X-popup-annoyance-blocker",
   "icons": {

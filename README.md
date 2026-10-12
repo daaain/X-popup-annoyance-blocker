@@ -44,6 +44,10 @@ x.com currently serves two different frontends, and the extension handles both:
   (X opens it spontaneously, or hijacks clicks on posts, Like, Follow, etc.),
   including undoing the `overflow: hidden` scroll-lock on `<body>`.
 - The **Google "Sign in with Google" one-tap** overlay.
+- The **"Don't miss what's happening" engagement modal** X shows instead of
+  opening a post you click (its date or anywhere on the card). The post is
+  opened directly instead, before X's click handler can cancel it.
+- The **"Log in or sign up for X" box** at the top of the right-hand column.
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.
 
@@ -194,6 +198,11 @@ utility classes, Base UI dialogs, **no** `data-testid` attributes, no
 - mobile app nag: `div[role="dialog"][data-interaction="app-store-obstruction"]`
   (backdrop and panel carry `…-backdrop` / `…-panel`), removed directly since
   the wrapper contains its own backdrop;
+- engagement modal: `div[data-engagement-modal]` (no `role="dialog"`),
+  shown by X's click handler on posts; posts are `div[role="link"][data-href]`
+  cards whose date is an `a[href*="/status/"]`;
+- sidebar login box: the `aside section` holding the
+  `/onboarding/…?mode=signup` link;
 - poisoned mobile links: `a[href*="launch_app_store"]` and `https://m.x.com/…`
   hrefs, rewritten to `x.com` with `launch_app_store` / `ct` params stripped.
 

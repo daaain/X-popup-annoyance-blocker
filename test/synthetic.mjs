@@ -94,6 +94,8 @@ async function run(engine) {
       refuseClicked: window.__fixture.refuseClicked,
       tweetHref: document.getElementById('tweet')?.getAttribute('href'),
       unlockClass: document.documentElement.classList.contains('xpab-unlock'),
+      loginBoxVisible: document.getElementById('login-box').getClientRects().length > 0,
+      otherSidebarVisible: document.getElementById('relevant-people').getClientRects().length > 0,
     };
   });
 
@@ -105,6 +107,8 @@ async function run(engine) {
   check(engine, 'app obstruction gone', !state.obstruction || !state.obstructionVisible);
   check(engine, 'cookie banner handled via refuse button', state.refuseClicked && !state.cookieBanner,
     `refuseClicked=${state.refuseClicked} bannerPresent=${state.cookieBanner}`);
+  check(engine, 'sidebar login box hidden', !state.loginBoxVisible);
+  check(engine, 'rest of the sidebar kept', state.otherSidebarVisible);
   check(engine, 'tweet href de-poisoned', !!state.tweetHref && !/launch_app_store|m\.x\.com/.test(state.tweetHref),
     state.tweetHref);
 

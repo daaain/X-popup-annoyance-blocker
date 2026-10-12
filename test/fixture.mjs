@@ -24,6 +24,14 @@ export const FIXTURE_HTML = `<!doctype html>
     <h1>Fixture timeline</h1>
     <a id="tweet" href="https://m.x.com/exolabs/status/123?launch_app_store=true&ct=engagement_view_post">A tweet</a>
     <p id="marker">scroll me</p>
+    <!-- The right-hand column's "Log in or sign up for X" box. -->
+    <aside>
+      <section id="login-box">
+        <h2>Log in or sign up for X</h2>
+        <a href="/i/jf/onboarding/web?mode=signup&amp;redirect_after_login=%2Ffixture">Continue with phone</a>
+      </section>
+      <section id="relevant-people"><h2>Relevant people</h2></section>
+    </aside>
     <!-- A reply, as on the logged-out post page: the whole card is a link. -->
     <div id="reply" role="link" tabindex="0" data-href="/someone/status/456">
       <a id="reply-author" href="/someone">Someone</a>
