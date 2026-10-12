@@ -50,6 +50,10 @@ x.com currently serves two different frontends, and the extension handles both:
   actions that genuinely need an account (Like, Download video, …) the
   modal is closed and a small "X requires an account for this" notice
   explains why nothing happened.
+- **"Something went wrong" on profiles** opened from a post or mention: X's
+  in-page navigation loads the timeline from an API that returns 404 when
+  logged out. Profile links are opened as normal page loads instead, which
+  X renders fine.
 - The **"Log in or sign up for X" box** at the top of the right-hand column.
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.

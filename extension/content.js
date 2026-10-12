@@ -273,17 +273,21 @@
     }
   }
 
-  // ------------------------------------------------------- post clicks —
-  // Logged out, X cancels clicks on a post (its date or its body, the whole
-  // card being a [role="link"][data-href]) and shows the engagement modal
-  // instead of opening it. Open the post ourselves, before X's handlers see
-  // the click. Buttons (Like, Reply, ...), media and other links inside the
-  // card are left to X.
+  // ---------------------------------------------- post and profile clicks —
+  // Logged out, X's in-page navigation is broken for the pages people open
+  // most, while a full page load of the same URL works:
+  //  - clicks on a post (its date or its body, the whole card being a
+  //    [role="link"][data-href]) are cancelled to show the engagement modal;
+  //  - opening a profile fetches its timeline from an API that returns 404,
+  //    leaving "Something went wrong" instead of posts.
+  // So open these ourselves, as a normal page load, before X's handlers see
+  // the click. Buttons (Like, Reply, ...), media and other links are left to X.
   const POST_PATH_RE = /^\/[^/]+\/status\/\d+/;
+  const PROFILE_PATH_RE = /^\/[A-Za-z0-9_]{1,15}\/?$/; // X handles: up to 15 word characters
   const CLICKABLE_SELECTOR =
     'a[href], [role="link"][data-href], button, [role="button"], video, input, textarea, select, label';
 
-  function postUrlFor(target) {
+  function pageUrlFor(target) {
     const clickable = target.closest(CLICKABLE_SELECTOR);
     if (!clickable) return null;
     const href = clickable.getAttribute('href') ?? clickable.getAttribute('data-href');
@@ -294,17 +298,18 @@
     } catch {
       return null;
     }
-    return url.origin === location.origin && POST_PATH_RE.test(url.pathname) ? url : null;
+    if (url.origin !== location.origin) return null;
+    return POST_PATH_RE.test(url.pathname) || PROFILE_PATH_RE.test(url.pathname) ? url : null;
   }
 
-  function openPostDirectly(e) {
+  function openPageDirectly(e) {
     if (!e.isTrusted || e.defaultPrevented || e.button !== 0) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // new tab etc.: browser default
     if (!isJetfuelPage() || !(e.target instanceof Element)) return;
     if (!window.getSelection().isCollapsed) return; // the user was selecting text
-    const url = postUrlFor(e.target);
+    const url = pageUrlFor(e.target);
     if (!url || url.pathname === location.pathname) return;
-    log('opening post directly', url.pathname);
+    log('opening page directly', url.pathname);
     e.preventDefault();
     e.stopImmediatePropagation();
     location.assign(url.href);
@@ -564,7 +569,7 @@
   }
   // On window, in the capture phase: the earliest point any page script can
   // see the click.
-  window.addEventListener('click', openPostDirectly, true);
+  window.addEventListener('click', openPageDirectly, true);
 
   new MutationObserver(scheduleHeal).observe(document.documentElement, {
     childList: true,

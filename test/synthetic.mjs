@@ -137,6 +137,19 @@ async function run(engine) {
       new URL(page.url()).pathname === '/someone/status/456', page.url());
   }
 
+  // Profiles must be opened with a real page load: X's in-page navigation
+  // fails to load the timeline when logged out.
+  await page.goto('https://x.com/fixture', { timeout: 30000 });
+  await page.waitForTimeout(2000);
+  await page.click('#reply-author', { timeout: 5000 });
+  await page.waitForTimeout(1500);
+  const profile = await page.evaluate(() => ({
+    path: location.pathname,
+    inPage: window.__fixture?.inPageNavigations ?? null,
+  }));
+  check(engine, 'clicking a profile loads it as a page', profile.path === '/someone' && profile.inPage === 0,
+    JSON.stringify(profile));
+
   // Clicks X still hijacks (e.g. Like, which needs an account) must not leave
   // the modal on screen.
   await page.goto('https://x.com/fixture', { timeout: 30000 });

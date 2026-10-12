@@ -2,7 +2,8 @@
 // triggered from this test runner: the EU-only cookie banner, scroll locks
 // applied via utility class and via position:fixed, the app-store obstruction
 // modal, tweet links whose own onclick navigates to the app store, and the
-// logged-out engagement modal X shows instead of opening a clicked post.
+// logged-out engagement modal X shows instead of opening a clicked post, and
+// X's in-page navigation to a profile, which fails when logged out.
 export const FIXTURE_HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -49,7 +50,18 @@ export const FIXTURE_HTML = `<!doctype html>
   </div>
 
 <script>
-  window.__fixture = { refuseClicked: false, appNavigations: [], engagementModals: 0 };
+  window.__fixture = { refuseClicked: false, appNavigations: [], engagementModals: 0, inPageNavigations: 0 };
+
+  // X navigates to profiles inside the page; logged out, the profile's
+  // timeline then fails to load ("Something went wrong").
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('#reply-author');
+    if (!link) return;
+    e.preventDefault();
+    history.pushState({}, '', link.getAttribute('href'));
+    document.body.textContent = 'Something went wrong';
+    window.__fixture.inPageNavigations++;
+  });
 
   // Logged out, X cancels clicks on a post (its date, body or buttons) and
   // shows an engagement modal instead. Profile links still work.
