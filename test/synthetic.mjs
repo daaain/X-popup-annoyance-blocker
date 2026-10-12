@@ -143,9 +143,11 @@ async function run(engine) {
   await page.waitForTimeout(800);
   const engagement = await page.evaluate(() => ({
     shown: window.__fixture.engagementModals,
-    visible: [...document.querySelectorAll('[data-engagement-modal]')].some((m) => m.getClientRects().length > 0),
+    open: document.querySelectorAll('[data-engagement-modal]').length,
   }));
-  check(engine, 'engagement modal dismissed', engagement.shown > 0 && !engagement.visible,
+  // Closed (not merely hidden), and promptly: recognised as a nag straight
+  // away rather than by the "no recent gesture" fallback.
+  check(engine, 'engagement modal dismissed', engagement.shown > 0 && engagement.open === 0,
     JSON.stringify(engagement));
   check(engine, 'Like click does not navigate', new URL(page.url()).pathname === '/fixture', page.url());
 

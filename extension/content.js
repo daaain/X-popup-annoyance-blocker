@@ -137,13 +137,23 @@
     !!el.querySelector('[data-interaction*="app-store-obstruction"]') ||
     !!el.querySelector('a[href*="launch_app_store"]');
 
+  // textContent runs adjacent elements together ("…happeningPeople on X…"),
+  // which defeats the \b word boundaries in ANNOYANCE_TEXT.
+  function readableText(el) {
+    const parts = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) parts.push(walker.currentNode.nodeValue);
+    return parts.join(' ');
+  }
+
   function isAnnoyanceDialog(dialog) {
     if (isAppStoreObstruction(dialog)) return true;
+    if (dialog.hasAttribute('data-engagement-modal')) return true;
     const ariaLabel = dialog.getAttribute('aria-label') || '';
     if (/\b(log ?in|sign ?up)\b/i.test(ariaLabel)) return true;
     if (dialog.querySelector(LEGACY_ANNOYANCE_SELECTORS)) return true;
     if (dialog.querySelector('[data-icon="icon-google"], [data-icon="icon-apple"]')) return true;
-    const text = dialog.textContent || '';
+    const text = readableText(dialog);
     return text.length < 3000 && ANNOYANCE_TEXT.test(text);
   }
 
