@@ -114,10 +114,12 @@ every overlay still on screen — so an unhandled popup can be reported exactly.
 Temporary (for testing): `about:debugging#/runtime/this-firefox` →
 **Load Temporary Add-on…** → pick `extension/manifest.json`.
 
-Permanent installs need a signed build: run `npm run build` and submit
-`dist/*.zip` to [addons.mozilla.org](https://addons.mozilla.org/developers/)
-(free, and "self-distribution" signing works if you don't want a public
-listing). The manifest already carries the required `browser_specific_settings`
+Permanent installs need a signed build. `npm run sign` submits the
+extension to [addons.mozilla.org](https://addons.mozilla.org/developers/) as
+an unlisted ("self-distribution") add-on and saves the signed `.xpi` in
+`dist/` (free, no public listing; needs AMO API credentials in
+`WEB_EXT_API_KEY` / `WEB_EXT_API_SECRET`). Install it via `about:addons` →
+⚙ → **Install Add-on From File…**. The manifest already carries the required `browser_specific_settings`
 (including `data_collection_permissions: none`) and passes `web-ext lint`
 with zero warnings.
 
