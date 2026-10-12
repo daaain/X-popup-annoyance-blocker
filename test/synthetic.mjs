@@ -96,6 +96,7 @@ async function run(engine) {
       unlockClass: document.documentElement.classList.contains('xpab-unlock'),
       loginBoxVisible: document.getElementById('login-box').getClientRects().length > 0,
       otherSidebarVisible: document.getElementById('relevant-people').getClientRects().length > 0,
+      noticeShown: !!document.querySelector('.xpab-notice-visible'),
     };
   });
 
@@ -107,6 +108,7 @@ async function run(engine) {
   check(engine, 'app obstruction gone', !state.obstruction || !state.obstructionVisible);
   check(engine, 'cookie banner handled via refuse button', state.refuseClicked && !state.cookieBanner,
     `refuseClicked=${state.refuseClicked} bannerPresent=${state.cookieBanner}`);
+  check(engine, 'no notice for popups the user did not click for', !state.noticeShown);
   check(engine, 'sidebar login box hidden', !state.loginBoxVisible);
   check(engine, 'rest of the sidebar kept', state.otherSidebarVisible);
   check(engine, 'tweet href de-poisoned', !!state.tweetHref && !/launch_app_store|m\.x\.com/.test(state.tweetHref),
@@ -144,11 +146,14 @@ async function run(engine) {
   const engagement = await page.evaluate(() => ({
     shown: window.__fixture.engagementModals,
     open: document.querySelectorAll('[data-engagement-modal]').length,
+    notice: document.querySelector('.xpab-notice-visible[role="status"]')?.textContent ?? null,
   }));
   // Closed (not merely hidden), and promptly: recognised as a nag straight
   // away rather than by the "no recent gesture" fallback.
   check(engine, 'engagement modal dismissed', engagement.shown > 0 && engagement.open === 0,
     JSON.stringify(engagement));
+  check(engine, 'notice explains the login-only click', /account/i.test(engagement.notice ?? ''),
+    String(engagement.notice));
   check(engine, 'Like click does not navigate', new URL(page.url()).pathname === '/fixture', page.url());
 
   await page.screenshot({ path: path.join(ARTIFACTS, `synthetic-${engine}.png`) });

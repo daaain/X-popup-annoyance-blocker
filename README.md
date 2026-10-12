@@ -46,7 +46,10 @@ x.com currently serves two different frontends, and the extension handles both:
 - The **Google "Sign in with Google" one-tap** overlay.
 - The **"Don't miss what's happening" engagement modal** X shows instead of
   opening a post you click (its date or anywhere on the card). The post is
-  opened directly instead, before X's click handler can cancel it.
+  opened directly instead, before X's click handler can cancel it. For
+  actions that genuinely need an account (Like, Download video, …) the
+  modal is closed and a small "X requires an account for this" notice
+  explains why nothing happened.
 - The **"Log in or sign up for X" box** at the top of the right-hand column.
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.

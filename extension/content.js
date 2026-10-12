@@ -39,7 +39,7 @@
 
   // ---------------------------------------------------------------- intent —
   // Track the user's last real gesture so dialogs they asked for are spared.
-  const lastGesture = { ts: 0, loginIntent: false };
+  const lastGesture = { ts: 0, clickTs: 0, loginIntent: false };
   const keptDialogs = new WeakSet();
 
   const LOGIN_INTENT_RE =
@@ -58,6 +58,7 @@
   function recordGesture(e) {
     if (!e.isTrusted) return;
     lastGesture.ts = Date.now();
+    if (e.type === 'click') lastGesture.clickTs = lastGesture.ts;
     lastGesture.loginIntent =
       e.target instanceof Element ? looksLikeLoginControl(e.target) : false;
   }
@@ -309,6 +310,27 @@
     location.assign(url.href);
   }
 
+  // --------------------------------------------------------------- notice —
+  // Login-only actions (Like, Download video, ...) make X open a full-screen
+  // popup. We close it, so say briefly why the click did nothing.
+  const NOTICE_MS = 3000;
+  let notice = null;
+  let noticeTimer = 0;
+
+  function showNotice(text) {
+    if (!document.body) return;
+    if (!notice || !notice.isConnected) {
+      notice = document.createElement('div');
+      notice.className = 'xpab-notice';
+      notice.setAttribute('role', 'status');
+      document.body.appendChild(notice);
+    }
+    notice.textContent = text;
+    notice.classList.add('xpab-notice-visible');
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => notice.classList.remove('xpab-notice-visible'), NOTICE_MS);
+  }
+
   // ------------------------------------------------------------ dismissal —
   const attempts = new WeakMap();
 
@@ -351,6 +373,12 @@
     if (tried >= 3) return;
     attempts.set(dialog, tried + 1);
     stats.dialogs++;
+
+    // A popup answering the user's own click (rather than one X opened by
+    // itself) means they tried something that needs an account.
+    if (tried === 0 && Date.now() - lastGesture.clickTs < 1500 && !isAppStoreObstruction(dialog)) {
+      showNotice('X requires an account for this');
+    }
 
     // The app-store obstruction has no state worth unwinding, and its
     // post-scroll variant ignores Escape. Its wrapper carries its own

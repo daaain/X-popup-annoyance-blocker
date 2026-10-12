@@ -45,6 +45,29 @@ iframe[src*="accounts.google.com/gsi/"] {
   display: none !important;
 }
 
+/* The extension's own notice, shown in place of a closed login-only popup
+   (see showNotice in content.js). */
+.xpab-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  padding: 10px 16px;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 25%); /* stands out on X's black theme too */
+  background: rgb(15 20 25 / 92%);
+  color: #fff;
+  font: 15px/20px system-ui, sans-serif;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 30%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.xpab-notice-visible {
+  opacity: 1;
+}
+
 /* ------------------------------------------------------------------------
    Scroll unlock.
 
