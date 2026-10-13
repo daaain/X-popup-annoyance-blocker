@@ -165,7 +165,8 @@ npm test         # end-to-end test against the real x.com (see below)
    licence). It goes live once Mozilla has reviewed it.
 3. `npm run amo:listing` uploads the listing icon and the screenshots listed
    in `amo/screenshots.json` (replacing the existing ones), which `web-ext`
-   can't do. Only needed when they change.
+   can't do. It also updates the listing text, so after editing only
+   `amo/metadata.json` you can run it without releasing a new version.
 
 ### How the e2e test works
 

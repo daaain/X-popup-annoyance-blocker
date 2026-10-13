@@ -1,7 +1,8 @@
-// Uploads the addons.mozilla.org listing assets that `web-ext sign` can't:
-// the listing icon and, if amo/screenshots.json exists, the screenshots
-// (replacing any already on the listing). Text fields such as the summary and
-// description go up with the version via `npm run sign:listed`.
+// Updates the addons.mozilla.org listing without uploading a new version: the
+// text from amo/metadata.json (summary, description, links, …), the listing
+// icon and, if amo/screenshots.json exists, the screenshots (replacing any
+// already on the listing). `npm run sign:listed` sends the same text along
+// with each new version, but can't upload the icon or screenshots.
 //
 // Needs the same WEB_EXT_API_KEY / WEB_EXT_API_SECRET as `web-ext sign`.
 import { createHmac, randomUUID } from 'node:crypto';
@@ -27,12 +28,17 @@ function jwt() {
 
 async function request(method, url, body) {
   const headers = { Authorization: `JWT ${jwt()}` };
-  if (body && !(body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-    body = JSON.stringify(body);
-  }
-  const response = await fetch(url, { method, headers, body });
+  const json = body && !(body instanceof FormData);
+  if (json) headers['Content-Type'] = 'application/json';
+  const response = await fetch(url, { method, headers, body: json ? JSON.stringify(body) : body });
   const text = await response.text();
+  if (response.status === 429) {
+    // AMO throttles uploads and says when to try again.
+    const seconds = Number(text.match(/available in (\d+) seconds/)?.[1] ?? 60);
+    console.log(`Throttled by AMO, retrying in ${seconds}s`);
+    await new Promise((resolve) => setTimeout(resolve, (seconds + 1) * 1000));
+    return request(method, url, body);
+  }
   if (!response.ok) throw new Error(`${method} ${url} failed: ${response.status} ${text}`);
   return text ? JSON.parse(text) : null;
 }
@@ -45,6 +51,10 @@ async function imageForm(field, file) {
 
 const manifest = JSON.parse(await readFile(path.join(root, MANIFEST), 'utf8'));
 const addonUrl = `${api}/addon/${encodeURIComponent(manifest.browser_specific_settings.gecko.id)}/`;
+
+const { version, ...listing } = JSON.parse(await readFile(path.join(root, 'amo', 'metadata.json'), 'utf8'));
+await request('PATCH', addonUrl, listing);
+console.log('Updated listing text');
 
 const addon = await request('PATCH', addonUrl, await imageForm('icon', ICON));
 console.log(`Uploaded icon: ${addon.icon_url}`);
