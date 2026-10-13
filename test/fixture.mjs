@@ -25,6 +25,7 @@ export const FIXTURE_HTML = `<!doctype html>
     <h1>Fixture timeline</h1>
     <a id="tweet" href="https://m.x.com/exolabs/status/123?launch_app_store=true&ct=engagement_view_post">A tweet</a>
     <p id="marker">scroll me</p>
+    <div id="carousel" style="height:120px;overflow-x:auto">swipe me</div>
     <!-- The right-hand column's "Log in or sign up for X" box. -->
     <aside>
       <section id="login-box">
@@ -116,7 +117,19 @@ export const FIXTURE_HTML = `<!doctype html>
       '<a href="https://m.x.com/exolabs?launch_app_store=true&ct=profile-modal">Open X</a></div>';
     document.body.appendChild(d);
     document.documentElement.classList.add('overflow-hidden');
+    // X's modal also locks scrolling in JS, exactly like this (from its
+    // modal-*.js bundle). Touch and wheel scrolling stay blocked while the
+    // modal component is mounted, whatever the CSS says.
+    const block = (e) => e.preventDefault();
+    document.addEventListener('touchmove', block, { capture: true, passive: false });
+    document.addEventListener('wheel', block, { capture: true, passive: false });
   }, 1500);
+
+  // An element (like a media carousel) that cancels scrolling for its own
+  // gestures. While the page is unlocked, its handlers don't run either.
+  for (const type of ['touchmove', 'wheel']) {
+    document.getElementById('carousel').addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  }
 
   // Keep re-applying the lock, the way a re-rendering SPA does.
   setInterval(() => {

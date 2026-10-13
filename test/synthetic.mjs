@@ -120,6 +120,32 @@ async function run(engine) {
   const scrollY = await page.evaluate(() => window.scrollY);
   check(engine, 'page actually scrolls', scrollY > 0, `scrollY=${scrollY}`);
 
+  // X also blocks scrolling with a page-wide touchmove/wheel listener that
+  // calls preventDefault(); scrollTo() above bypasses that, a finger doesn't.
+  // A cancelable wheel event shows whether such a listener still wins
+  // (TouchEvent can't be constructed in desktop Firefox).
+  const cancelled = await page.evaluate(() => {
+    const wheel = (id) => {
+      const e = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true });
+      document.getElementById(id).dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    return { page: wheel('marker'), carousel: wheel('carousel') };
+  });
+  // Element handlers are stopped as well: the price of not touching anything
+  // the page can inspect. Native scrolling and taps are unaffected.
+  check(engine, 'page-wide JS scroll lock ignored', !cancelled.page && !cancelled.carousel);
+  if (engine === 'chromium') {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('Input.synthesizeScrollGesture', {
+      x: 200, y: 600, yDistance: -500, gestureSourceType: 'touch', speed: 800,
+    });
+    await page.waitForTimeout(800);
+    const swiped = await page.evaluate(() => window.scrollY);
+    check(engine, 'touch swipe scrolls the page', swiped > 0, `scrollY=${swiped}`);
+  }
+
   // Tapping the tweet must not hand the app-store URL to the page's onclick.
   await page.click('#tweet', { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(500);
