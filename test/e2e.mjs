@@ -164,6 +164,17 @@ const m1 = await mpage.evaluate(() => ({
 check('mobile: app obstruction popup removed', !m1.obstruction && m1.dialogs === 0, `dialogs=${m1.dialogs}`);
 check('mobile: no poisoned app links', m1.poisoned === 0, `${m1.poisoned} poisoned`);
 
+// When logged-out timelines are rate-limited the page can be a single screen
+// tall; pad it so there is always something to scroll.
+const timelineLoaded = await mpage.evaluate(() => document.scrollingElement.scrollHeight > innerHeight * 2);
+await mpage.evaluate(() => {
+  if (document.scrollingElement.scrollHeight < innerHeight * 4) {
+    const spacer = document.createElement('div');
+    spacer.style.height = `${innerHeight * 4}px`;
+    document.body.append(spacer);
+  }
+});
+
 // mouse.wheel is inert under Playwright's touch emulation, so assert
 // scrollability directly: no overflow lock and a working scroll.
 await mpage.evaluate(() => window.scrollTo(0, 1200));
@@ -182,6 +193,23 @@ check(
   `scrollY=${m2.scrollY} html=${m2.htmlOverflow} body=${m2.bodyOverflow}`
 );
 check('mobile: post-scroll popup also gone', !m2.obstruction);
+
+// scrollTo() bypasses X's JS scroll lock (a page-wide touchmove listener
+// that cancels every swipe while its modal is mounted), so also swipe with a
+// real touch gesture. Only on real content: swipes over the empty space of a
+// padded, rate-limited page don't scroll even without any lock.
+if (timelineLoaded) {
+  await mpage.evaluate(() => window.scrollTo(0, 0));
+  const mcdp = await mctx.newCDPSession(mpage);
+  await mcdp.send('Input.synthesizeScrollGesture', {
+    x: 200, y: 600, yDistance: -500, gestureSourceType: 'touch', speed: 800,
+  });
+  await mpage.waitForTimeout(1000);
+  const swiped = await mpage.evaluate(() => window.scrollY);
+  check('mobile: touch swipe scrolls the page', swiped > 0, `scrollY=${swiped}`);
+} else {
+  console.log('SKIP  mobile: touch swipe (X served no timeline, likely rate-limited)');
+}
 await mpage.screenshot({ path: path.join(ARTIFACTS, 'e2e-4-mobile-clean.png') });
 
 // Tapping a tweet must open the post on x.com, not bounce to the app store.

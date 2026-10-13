@@ -18,7 +18,7 @@
   "version": {
     "license": "Apache-2.0",
     "release_notes": {
-      "en-GB": "- Opens the post you clicked instead of X's \"Don't miss what's happening\" popup.\n- Hides the \"Log in or sign up for X\" box in the sidebar.\n- Shows a small notice when an action needs an account.\n- Fixes \"Something went wrong\" when opening profiles from posts.\n- Fixes the page not scrolling on mobile when a cookie banner is shown, and tweet links opening the app store."
+      "en-GB": "- Fixes pages that stopped scrolling a few seconds after loading on phones: X's \"Get the full app experience\" popup kept blocking swipes even after it was hidden."
     }
   }
 }

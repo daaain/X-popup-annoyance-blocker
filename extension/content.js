@@ -571,6 +571,23 @@
   // see the click.
   window.addEventListener('click', openPageDirectly, true);
 
+  // X's modals also lock scrolling in JS: while one is mounted, a page-wide
+  // listener (on document, capture phase) cancels every touchmove and wheel
+  // event, so a finger can't scroll whatever the CSS says. Hiding or removing
+  // the modal's DOM doesn't unmount it, so that lock never lifts. While the
+  // page is unlocked, stop those events on window, before any page listener
+  // can cancel them. The page's own touchmove/wheel handlers don't run then
+  // either; native scrolling and taps are unaffected.
+  for (const type of ['touchmove', 'wheel']) {
+    window.addEventListener(
+      type,
+      (e) => {
+        if (document.documentElement.classList.contains('xpab-unlock')) e.stopImmediatePropagation();
+      },
+      { capture: true, passive: true }
+    );
+  }
+
   new MutationObserver(scheduleHeal).observe(document.documentElement, {
     childList: true,
     subtree: true,
