@@ -27,7 +27,7 @@ const svg = (size) => `<!doctype html><meta charset="utf-8">
 
 await mkdir(iconsDir, { recursive: true });
 const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
+  executablePath: process.env.CHROMIUM_PATH || undefined,
 });
 const page = await browser.newPage();
 

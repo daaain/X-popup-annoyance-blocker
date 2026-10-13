@@ -30,7 +30,9 @@ async function openPage(engine) {
       path.join(ARTIFACTS, `syn-chromium-${Date.now()}`),
       {
         headless: true,
-        executablePath: '/opt/pw-browsers/chromium',
+        // Defaults to Playwright's own Chromium; the sandbox VM sets CHROMIUM_PATH.
+        executablePath: process.env.CHROMIUM_PATH || undefined,
+        channel: process.env.CHROMIUM_PATH ? undefined : 'chromium',
         viewport: { width: 412, height: 915 },
         userAgent: MOBILE_UA,
         isMobile: true,
@@ -92,6 +94,9 @@ async function run(engine) {
       refuseClicked: window.__fixture.refuseClicked,
       tweetHref: document.getElementById('tweet')?.getAttribute('href'),
       unlockClass: document.documentElement.classList.contains('xpab-unlock'),
+      loginBoxVisible: document.getElementById('login-box').getClientRects().length > 0,
+      otherSidebarVisible: document.getElementById('relevant-people').getClientRects().length > 0,
+      noticeShown: !!document.querySelector('.xpab-notice-visible'),
     };
   });
 
@@ -103,6 +108,9 @@ async function run(engine) {
   check(engine, 'app obstruction gone', !state.obstruction || !state.obstructionVisible);
   check(engine, 'cookie banner handled via refuse button', state.refuseClicked && !state.cookieBanner,
     `refuseClicked=${state.refuseClicked} bannerPresent=${state.cookieBanner}`);
+  check(engine, 'no notice for popups the user did not click for', !state.noticeShown);
+  check(engine, 'sidebar login box hidden', !state.loginBoxVisible);
+  check(engine, 'rest of the sidebar kept', state.otherSidebarVisible);
   check(engine, 'tweet href de-poisoned', !!state.tweetHref && !/launch_app_store|m\.x\.com/.test(state.tweetHref),
     state.tweetHref);
 
@@ -119,11 +127,54 @@ async function run(engine) {
   check(engine, 'tap does not reach app-store URL', !navs.some((u) => /launch_app_store|m\.x\.com/.test(u)),
     JSON.stringify(navs));
 
+  // Clicking a post must open it, not X's "Don't miss what's happening" modal.
+  for (const target of ['#reply-date', '#reply-body']) {
+    await page.goto('https://x.com/fixture', { timeout: 30000 });
+    await page.waitForTimeout(2000);
+    await page.click(target, { timeout: 5000 });
+    await page.waitForURL('**/someone/status/456', { timeout: 3000 }).catch(() => {});
+    check(engine, `clicking a post (${target}) opens it`,
+      new URL(page.url()).pathname === '/someone/status/456', page.url());
+  }
+
+  // Profiles must be opened with a real page load: X's in-page navigation
+  // fails to load the timeline when logged out.
+  await page.goto('https://x.com/fixture', { timeout: 30000 });
+  await page.waitForTimeout(2000);
+  await page.click('#reply-author', { timeout: 5000 });
+  await page.waitForTimeout(1500);
+  const profile = await page.evaluate(() => ({
+    path: location.pathname,
+    inPage: window.__fixture?.inPageNavigations ?? null,
+  }));
+  check(engine, 'clicking a profile loads it as a page', profile.path === '/someone' && profile.inPage === 0,
+    JSON.stringify(profile));
+
+  // Clicks X still hijacks (e.g. Like, which needs an account) must not leave
+  // the modal on screen.
+  await page.goto('https://x.com/fixture', { timeout: 30000 });
+  await page.waitForTimeout(2000);
+  await page.click('#reply-like', { timeout: 5000 });
+  await page.waitForTimeout(800);
+  const engagement = await page.evaluate(() => ({
+    shown: window.__fixture.engagementModals,
+    open: document.querySelectorAll('[data-engagement-modal]').length,
+    notice: document.querySelector('.xpab-notice-visible[role="status"]')?.textContent ?? null,
+  }));
+  // Closed (not merely hidden), and promptly: recognised as a nag straight
+  // away rather than by the "no recent gesture" fallback.
+  check(engine, 'engagement modal dismissed', engagement.shown > 0 && engagement.open === 0,
+    JSON.stringify(engagement));
+  check(engine, 'notice explains the login-only click', /account/i.test(engagement.notice ?? ''),
+    String(engagement.notice));
+  check(engine, 'Like click does not navigate', new URL(page.url()).pathname === '/fixture', page.url());
+
   await page.screenshot({ path: path.join(ARTIFACTS, `synthetic-${engine}.png`) });
   await ctx.close();
   if (browser) await browser.close();
 }
 
-for (const engine of ['chromium', 'firefox']) await run(engine);
+const engines = (process.env.ENGINES ?? 'chromium,firefox').split(',');
+for (const engine of engines) await run(engine);
 console.log(failures ? `\n${failures} synthetic check(s) FAILED` : '\nall synthetic checks passed');
 process.exit(failures ? 1 : 0);

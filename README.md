@@ -44,6 +44,17 @@ x.com currently serves two different frontends, and the extension handles both:
   (X opens it spontaneously, or hijacks clicks on posts, Like, Follow, etc.),
   including undoing the `overflow: hidden` scroll-lock on `<body>`.
 - The **Google "Sign in with Google" one-tap** overlay.
+- The **"Don't miss what's happening" engagement modal** X shows instead of
+  opening a post you click (its date or anywhere on the card). The post is
+  opened directly instead, before X's click handler can cancel it. For
+  actions that genuinely need an account (Like, Download video, …) the
+  modal is closed and a small "X requires an account for this" notice
+  explains why nothing happened.
+- **"Something went wrong" on profiles** opened from a post or mention: X's
+  in-page navigation loads the timeline from an API that returns 404 when
+  logged out. Profile links are opened as normal page loads instead, which
+  X renders fine.
+- The **"Log in or sign up for X" box** at the top of the right-hand column.
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.
 
@@ -114,10 +125,12 @@ every overlay still on screen — so an unhandled popup can be reported exactly.
 Temporary (for testing): `about:debugging#/runtime/this-firefox` →
 **Load Temporary Add-on…** → pick `extension/manifest.json`.
 
-Permanent installs need a signed build: run `npm run build` and submit
-`dist/*.zip` to [addons.mozilla.org](https://addons.mozilla.org/developers/)
-(free, and "self-distribution" signing works if you don't want a public
-listing). The manifest already carries the required `browser_specific_settings`
+Permanent installs need a signed build. `npm run sign` submits the
+extension to [addons.mozilla.org](https://addons.mozilla.org/developers/) as
+an unlisted ("self-distribution") add-on and saves the signed `.xpi` in
+`dist/` (free, no public listing; needs AMO API credentials in
+`WEB_EXT_API_KEY` / `WEB_EXT_API_SECRET`). Install it via `about:addons` →
+⚙ → **Install Add-on From File…**. The manifest already carries the required `browser_specific_settings`
 (including `data_collection_permissions: none`) and passes `web-ext lint`
 with zero warnings.
 
@@ -192,6 +205,11 @@ utility classes, Base UI dialogs, **no** `data-testid` attributes, no
 - mobile app nag: `div[role="dialog"][data-interaction="app-store-obstruction"]`
   (backdrop and panel carry `…-backdrop` / `…-panel`), removed directly since
   the wrapper contains its own backdrop;
+- engagement modal: `div[data-engagement-modal]` (no `role="dialog"`),
+  shown by X's click handler on posts; posts are `div[role="link"][data-href]`
+  cards whose date is an `a[href*="/status/"]`;
+- sidebar login box: the `aside section` holding the
+  `/onboarding/…?mode=signup` link;
 - poisoned mobile links: `a[href*="launch_app_store"]` and `https://m.x.com/…`
   hrefs, rewritten to `x.com` with `launch_app_store` / `ct` params stripped.
 

@@ -20,6 +20,21 @@ button.fixed[class~="z-1000"] {
   display: none !important;
 }
 
+/* Logged-out page: "Don't miss what's happening" engagement modal, shown
+   instead of opening a clicked post. Never something the user asked for
+   (Log in / Sign up go to their own page), so hide it before it paints;
+   content.js then closes it properly. */
+[data-engagement-modal] {
+  display: none !important;
+}
+
+/* Logged-out page: the "Log in or sign up for X" box at the top of the
+   right-hand column, recognised by its sign-up link. Logging in still works
+   via x.com/i/flow/login. */
+aside section:has(a[href*="/onboarding/"][href*="mode=signup"]) {
+  display: none !important;
+}
+
 /* Legacy React app: "Don't miss what's happening" bottom bar. */
 [data-testid="BottomBar"] {
   display: none !important;
@@ -28,6 +43,29 @@ button.fixed[class~="z-1000"] {
 /* Google "Sign in with Google" one-tap popup. */
 iframe[src*="accounts.google.com/gsi/"] {
   display: none !important;
+}
+
+/* The extension's own notice, shown in place of a closed login-only popup
+   (see showNotice in content.js). */
+.xpab-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  padding: 10px 16px;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 25%); /* stands out on X's black theme too */
+  background: rgb(15 20 25 / 92%);
+  color: #fff;
+  font: 15px/20px system-ui, sans-serif;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 30%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.xpab-notice-visible {
+  opacity: 1;
 }
 
 /* ------------------------------------------------------------------------

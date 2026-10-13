@@ -5,8 +5,10 @@
 //  - Logged-out visitors get a server-rendered page (utility CSS classes,
 //    Base UI dialogs, no #react-root). Annoyances: a "Continue to X" content
 //    wall, a "Scan to get the app" QR popup, a login modal, a cookie banner,
-//    and on mobile a "Get the full app experience" app-store obstruction plus
-//    tweet links rewritten to bounce into the app store.
+//    clicks on posts hijacked to show a "Don't miss what's happening"
+//    engagement modal, and on mobile a "Get the full app experience"
+//    app-store obstruction plus tweet links rewritten to bounce into the app
+//    store.
 //  - The classic React app (#react-root, data-testid) when logged in.
 //
 // Design notes, learned the hard way:
@@ -37,7 +39,7 @@
 
   // ---------------------------------------------------------------- intent —
   // Track the user's last real gesture so dialogs they asked for are spared.
-  const lastGesture = { ts: 0, loginIntent: false };
+  const lastGesture = { ts: 0, clickTs: 0, loginIntent: false };
   const keptDialogs = new WeakSet();
 
   const LOGIN_INTENT_RE =
@@ -56,6 +58,7 @@
   function recordGesture(e) {
     if (!e.isTrusted) return;
     lastGesture.ts = Date.now();
+    if (e.type === 'click') lastGesture.clickTs = lastGesture.ts;
     lastGesture.loginIntent =
       e.target instanceof Element ? looksLikeLoginControl(e.target) : false;
   }
@@ -135,13 +138,23 @@
     !!el.querySelector('[data-interaction*="app-store-obstruction"]') ||
     !!el.querySelector('a[href*="launch_app_store"]');
 
+  // textContent runs adjacent elements together ("…happeningPeople on X…"),
+  // which defeats the \b word boundaries in ANNOYANCE_TEXT.
+  function readableText(el) {
+    const parts = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) parts.push(walker.currentNode.nodeValue);
+    return parts.join(' ');
+  }
+
   function isAnnoyanceDialog(dialog) {
     if (isAppStoreObstruction(dialog)) return true;
+    if (dialog.hasAttribute('data-engagement-modal')) return true;
     const ariaLabel = dialog.getAttribute('aria-label') || '';
     if (/\b(log ?in|sign ?up)\b/i.test(ariaLabel)) return true;
     if (dialog.querySelector(LEGACY_ANNOYANCE_SELECTORS)) return true;
     if (dialog.querySelector('[data-icon="icon-google"], [data-icon="icon-apple"]')) return true;
-    const text = dialog.textContent || '';
+    const text = readableText(dialog);
     return text.length < 3000 && ANNOYANCE_TEXT.test(text);
   }
 
@@ -260,6 +273,69 @@
     }
   }
 
+  // ---------------------------------------------- post and profile clicks —
+  // Logged out, X's in-page navigation is broken for the pages people open
+  // most, while a full page load of the same URL works:
+  //  - clicks on a post (its date or its body, the whole card being a
+  //    [role="link"][data-href]) are cancelled to show the engagement modal;
+  //  - opening a profile fetches its timeline from an API that returns 404,
+  //    leaving "Something went wrong" instead of posts.
+  // So open these ourselves, as a normal page load, before X's handlers see
+  // the click. Buttons (Like, Reply, ...), media and other links are left to X.
+  const POST_PATH_RE = /^\/[^/]+\/status\/\d+/;
+  const PROFILE_PATH_RE = /^\/[A-Za-z0-9_]{1,15}\/?$/; // X handles: up to 15 word characters
+  const CLICKABLE_SELECTOR =
+    'a[href], [role="link"][data-href], button, [role="button"], video, input, textarea, select, label';
+
+  function pageUrlFor(target) {
+    const clickable = target.closest(CLICKABLE_SELECTOR);
+    if (!clickable) return null;
+    const href = clickable.getAttribute('href') ?? clickable.getAttribute('data-href');
+    if (!href) return null;
+    let url;
+    try {
+      url = new URL(cleanUrl(href) ?? href, location.href);
+    } catch {
+      return null;
+    }
+    if (url.origin !== location.origin) return null;
+    return POST_PATH_RE.test(url.pathname) || PROFILE_PATH_RE.test(url.pathname) ? url : null;
+  }
+
+  function openPageDirectly(e) {
+    if (!e.isTrusted || e.defaultPrevented || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // new tab etc.: browser default
+    if (!isJetfuelPage() || !(e.target instanceof Element)) return;
+    if (!window.getSelection().isCollapsed) return; // the user was selecting text
+    const url = pageUrlFor(e.target);
+    if (!url || url.pathname === location.pathname) return;
+    log('opening page directly', url.pathname);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    location.assign(url.href);
+  }
+
+  // --------------------------------------------------------------- notice —
+  // Login-only actions (Like, Download video, ...) make X open a full-screen
+  // popup. We close it, so say briefly why the click did nothing.
+  const NOTICE_MS = 3000;
+  let notice = null;
+  let noticeTimer = 0;
+
+  function showNotice(text) {
+    if (!document.body) return;
+    if (!notice || !notice.isConnected) {
+      notice = document.createElement('div');
+      notice.className = 'xpab-notice';
+      notice.setAttribute('role', 'status');
+      document.body.appendChild(notice);
+    }
+    notice.textContent = text;
+    notice.classList.add('xpab-notice-visible');
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => notice.classList.remove('xpab-notice-visible'), NOTICE_MS);
+  }
+
   // ------------------------------------------------------------ dismissal —
   const attempts = new WeakMap();
 
@@ -302,6 +378,12 @@
     if (tried >= 3) return;
     attempts.set(dialog, tried + 1);
     stats.dialogs++;
+
+    // A popup answering the user's own click (rather than one X opened by
+    // itself) means they tried something that needs an account.
+    if (tried === 0 && Date.now() - lastGesture.clickTs < 1500 && !isAppStoreObstruction(dialog)) {
+      showNotice('X requires an account for this');
+    }
 
     // The app-store obstruction has no state worth unwinding, and its
     // post-scroll variant ignores Escape. Its wrapper carries its own
@@ -349,7 +431,7 @@
     if (!document.body) return;
 
     for (const dialog of document.querySelectorAll(
-      '[role="dialog"], [aria-modal="true"], [data-testid="sheetDialog"], [data-testid="confirmationSheetDialog"]'
+      '[role="dialog"], [aria-modal="true"], [data-engagement-modal], [data-testid="sheetDialog"], [data-testid="confirmationSheetDialog"]'
     )) {
       if (keptDialogs.has(dialog)) continue;
       if (shouldDismiss(dialog)) dismissDialog(dialog);
@@ -485,6 +567,9 @@
     document.addEventListener(type, recordGesture, true);
     document.addEventListener(type, guardTap, true);
   }
+  // On window, in the capture phase: the earliest point any page script can
+  // see the click.
+  window.addEventListener('click', openPageDirectly, true);
 
   new MutationObserver(scheduleHeal).observe(document.documentElement, {
     childList: true,
