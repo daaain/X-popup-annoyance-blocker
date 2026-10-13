@@ -1,0 +1,17 @@
+{
+  "summary": {
+    "en-GB": "Removes the sign-up, log-in and install-the-app popups that x.com puts in front of logged-out visitors, and makes the page scroll again."
+  },
+  "description": {
+    "en-GB": "Reading x.com without an account means fighting a wall of popups: \"Continue to X\", \"Scan to get the app\", surprise log-in dialogs and, on phones, \"Get the full app experience\". Hiding them with an element-hiding filter leaves the page frozen, because X also locks scrolling. This add-on dismisses them properly and keeps the page scrollable.\n\n<b>What it removes</b>\n<ul><li>The \"Continue to X\" wall at the bottom of profiles and posts.</li><li>The \"Scan to get the app\" QR code popup.</li><li>Log-in and sign-up dialogs that open on their own, or when X takes over a click on a post, Like or Follow.</li><li>The \"Don't miss what's happening\" popup shown instead of the post you clicked. The post opens instead.</li><li>The \"Log in or sign up for X\" box in the sidebar, and the Google one-tap sign-in overlay.</li><li>On phones: the \"Get the full app experience\" / \"Open X\" popup, and tweet links that send you to the app store instead of the post.</li><li>Cookie banners, by choosing \"Refuse non-essential cookies\" where offered.</li></ul>\n<b>What it leaves alone</b>\nIf you click \"Log in\" or \"Sign up\" yourself, that dialog stays open, so you can still log in. For actions that need an account, such as Like, a small notice explains why nothing happened.\n\n<b>Privacy</b>\nIt only runs on x.com and twitter.com, collects no data and sends nothing anywhere. It needs access to those sites to rewrite app-store redirect links back to normal x.com links.\n\nWorks in Firefox on desktop and Android. The source code is on GitHub.\n\nThis add-on is not made, endorsed or supported by X Corp."
+  },
+  "categories": ["privacy-security"],
+  "homepage": { "en-GB": "https://github.com/daaain/X-popup-annoyance-blocker" },
+  "support_url": { "en-GB": "https://github.com/daaain/X-popup-annoyance-blocker/issues" },
+  "version": {
+    "license": "Apache-2.0",
+    "release_notes": {
+      "en-GB": "<ul><li>Opens the post you clicked instead of X's \"Don't miss what's happening\" popup.</li><li>Hides the \"Log in or sign up for X\" box in the sidebar.</li><li>Shows a small notice when an action needs an account.</li><li>Fixes \"Something went wrong\" when opening profiles from posts.</li><li>Fixes the page not scrolling on mobile when a cookie banner is shown, and tweet links opening the app store.</li></ul>"
+    }
+  }
+}

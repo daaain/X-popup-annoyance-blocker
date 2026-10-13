@@ -1,29 +1,17 @@
-// Renders the extension icon (an SVG defined inline) to PNGs at the sizes the
+// Renders the extension icon (extension/icons/icon.svg) to PNGs at the sizes the
 // manifest needs, using the pre-installed Chromium via Playwright.
 import { chromium } from 'playwright';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const iconsDir = path.join(root, 'extension', 'icons');
 
+const icon = await readFile(path.join(iconsDir, 'icon.svg'), 'utf8');
 const svg = (size) => `<!doctype html><meta charset="utf-8">
-<style>html,body{margin:0;padding:0;background:transparent}</style>
-<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 128 128">
-  <rect x="4" y="4" width="120" height="120" rx="28" fill="#0f1419"/>
-  <!-- popup window being crossed out -->
-  <rect x="26" y="34" width="76" height="60" rx="8" fill="#fff"/>
-  <rect x="26" y="34" width="76" height="16" rx="8" fill="#536471"/>
-  <rect x="26" y="42" width="76" height="8" fill="#536471"/>
-  <circle cx="36" cy="42" r="3.5" fill="#fff"/>
-  <circle cx="47" cy="42" r="3.5" fill="#fff"/>
-  <!-- red cross over it -->
-  <g stroke="#f4212e" stroke-width="14" stroke-linecap="round">
-    <line x1="34" y1="36" x2="94" y2="96"/>
-    <line x1="94" y1="36" x2="34" y2="96"/>
-  </g>
-</svg>`;
+<style>html,body{margin:0;padding:0;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>
+${icon}`;
 
 await mkdir(iconsDir, { recursive: true });
 const browser = await chromium.launch({

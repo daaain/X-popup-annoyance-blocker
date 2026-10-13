@@ -8,6 +8,8 @@
     "icons": "node scripts/make-icons.mjs",
     "build": "web-ext build --source-dir extension --artifacts-dir dist --overwrite-dest",
     "sign": "web-ext sign --source-dir extension --artifacts-dir dist --channel unlisted",
+    "sign:listed": "web-ext sign --source-dir extension --artifacts-dir dist --channel listed --amo-metadata amo/metadata.json",
+    "amo:listing": "node scripts/amo-listing.mjs",
     "test": "node test/e2e.mjs",
     "lint": "web-ext lint --source-dir extension",
     "test:synthetic": "node test/synthetic.mjs",

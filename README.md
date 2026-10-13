@@ -120,9 +120,12 @@ every overlay still on screen — so an unhandled popup can be reported exactly.
 
 (For the Chrome Web Store you'd upload the zip from `npm run build`.)
 
-### Firefox (desktop)
+### Firefox (desktop and Android)
 
-Temporary (for testing): `about:debugging#/runtime/this-firefox` →
+Install it from addons.mozilla.org:
+<https://addons.mozilla.org/firefox/addon/x-popup-annoyance-blocker/>
+
+From source, temporary (for testing): `about:debugging#/runtime/this-firefox` →
 **Load Temporary Add-on…** → pick `extension/manifest.json`.
 
 Permanent installs need a signed build. `npm run sign` submits the
@@ -138,8 +141,7 @@ with zero warnings.
 
 Firefox for Android only installs signed add-ons, so:
 
-- **Easiest**: publish on addons.mozilla.org (see above) and install it from
-  AMO on your phone — Android Firefox supports the open add-on ecosystem.
+- **Easiest**: install it from addons.mozilla.org (see above) on your phone.
 - **For development**: connect the phone via USB debugging and run
   `npx web-ext run --target firefox-android --source-dir extension
   --android-device <device-id>`.
@@ -150,9 +152,20 @@ Firefox for Android only installs signed add-ons, so:
 npm install
 npm run lint     # web-ext lint (Firefox/AMO validation)
 npm run build    # dist/*.zip for store submission
-npm run icons    # regenerate icons/ from the inline SVG
+npm run icons    # regenerate the PNG icons from extension/icons/icon.svg
 npm test         # end-to-end test against the real x.com (see below)
 ```
+
+### Releasing on addons.mozilla.org
+
+1. Bump `version` in `extension/manifest.json` and update the release notes
+   in `amo/metadata.json`.
+2. `npm run sign:listed` uploads the new version together with the listing
+   text in `amo/metadata.json` (summary, description, categories, links,
+   licence). It goes live once Mozilla has reviewed it.
+3. `npm run amo:listing` uploads the listing icon and the screenshots listed
+   in `amo/screenshots.json` (replacing the existing ones), which `web-ext`
+   can't do. Only needed when they change.
 
 ### How the e2e test works
 
@@ -225,3 +238,7 @@ the page's own `onclick` can navigate using a URL the handler already holds.
 `declarativeNetRequest` — `m.x.com` → `x.com` and `launch_app_store`/`ct`/`mx`
 params removed on main-frame navigations — which works no matter how the
 navigation was started.
+
+## Licence
+
+Apache 2.0, see `LICENSE`. Not affiliated with X Corp.
