@@ -1,0 +1,10 @@
+[
+  {
+    "file": "screenshots/before.png",
+    "caption": "Without the add-on: a logged-out profile on x.com, covered by the \"Continue to X\" wall, a sign-up box, an app QR code and a cookie banner."
+  },
+  {
+    "file": "screenshots/after.png",
+    "caption": "With the add-on: the same profile with the popups gone and scrolling working. The cookie banner was answered with \"Refuse non-essential cookies\"."
+  }
+]
