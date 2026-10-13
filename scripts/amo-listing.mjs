@@ -61,13 +61,23 @@ console.log(`Uploaded icon: ${addon.icon_url}`);
 
 const screenshotsFile = path.join(root, 'amo', 'screenshots.json');
 if (existsSync(screenshotsFile)) {
-  for (const preview of addon.previews) {
-    await request('DELETE', `${addonUrl}previews/${preview.id}/`);
-  }
-  for (const { file, caption } of JSON.parse(await readFile(screenshotsFile, 'utf8'))) {
-    const preview = await request('POST', `${addonUrl}previews/`, await imageForm('image', path.join('amo', file)));
+  // Read every image before touching the listing, and only remove the old
+  // screenshots once all the new ones are up, so a failure never leaves the
+  // listing without screenshots.
+  const screenshots = await Promise.all(
+    JSON.parse(await readFile(screenshotsFile, 'utf8')).map(async ({ file, caption }) => ({
+      file,
+      caption,
+      form: await imageForm('image', path.join('amo', file)),
+    }))
+  );
+  for (const { file, caption, form } of screenshots) {
+    const preview = await request('POST', `${addonUrl}previews/`, form);
     await request('PATCH', `${addonUrl}previews/${preview.id}/`, { caption: { [addon.default_locale]: caption } });
     console.log(`Uploaded screenshot: ${file}`);
+  }
+  for (const preview of addon.previews) {
+    await request('DELETE', `${addonUrl}previews/${preview.id}/`);
   }
 }
 
