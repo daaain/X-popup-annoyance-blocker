@@ -14,8 +14,14 @@ import path from 'node:path';
 const ICON = 'extension/icons/icon-128.png';
 const MANIFEST = 'extension/manifest.json';
 
+// AMO answers 429 with how long to wait. Short waits are retried a few times;
+// longer ones mean an hourly or daily limit, which every retry (and every
+// upload on the website) uses up further, so stop and say when to try again.
+const MAX_THROTTLE_WAIT_SECONDS = 120;
+const MAX_THROTTLE_RETRIES = 3;
+
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const api = 'https://addons.mozilla.org/api/v5/addons';
+const api = process.env.AMO_API_URL ?? 'https://addons.mozilla.org/api/v5/addons';
 
 function jwt() {
   const { WEB_EXT_API_KEY: issuer, WEB_EXT_API_SECRET: secret } = process.env;
@@ -26,18 +32,23 @@ function jwt() {
   return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
 }
 
-async function request(method, url, body) {
+async function request(method, url, body, retries = 0) {
   const headers = { Authorization: `JWT ${jwt()}` };
   const json = body && !(body instanceof FormData);
   if (json) headers['Content-Type'] = 'application/json';
   const response = await fetch(url, { method, headers, body: json ? JSON.stringify(body) : body });
   const text = await response.text();
   if (response.status === 429) {
-    // AMO throttles uploads and says when to try again.
-    const seconds = Number(text.match(/available in (\d+) seconds/)?.[1] ?? 60);
+    const seconds = Number(text.match(/available in (\d+) seconds/)?.[1]);
+    if (!(seconds <= MAX_THROTTLE_WAIT_SECONDS) || retries >= MAX_THROTTLE_RETRIES) {
+      const minutes = Math.ceil(seconds / 60);
+      const wait = minutes >= 90 ? `${Math.round(minutes / 60)} hours` : minutes > 1 ? `${minutes} minutes` : 'a minute';
+      const when = seconds ? ` Try again in about ${wait}.` : '';
+      throw new Error(`AMO is throttling requests, so stopping here.${when} It's safe to run this again then: it replaces what's already uploaded.`);
+    }
     console.log(`Throttled by AMO, retrying in ${seconds}s`);
     await new Promise((resolve) => setTimeout(resolve, (seconds + 1) * 1000));
-    return request(method, url, body);
+    return request(method, url, body, retries + 1);
   }
   if (!response.ok) throw new Error(`${method} ${url} failed: ${response.status} ${text}`);
   return text ? JSON.parse(text) : null;
