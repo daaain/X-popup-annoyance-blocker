@@ -54,6 +54,10 @@ x.com currently serves two different frontends, and the extension handles both:
   in-page navigation loads the timeline from an API that returns 404 when
   logged out. Profile links are opened as normal page loads instead, which
   X renders fine.
+- **Photos that "open" the same post again**: a photo's link leads to a
+  `…/photo/1` page that, logged out, is just the post. Clicking a photo
+  shows it full size in an overlay instead; click anywhere (or press Escape)
+  to close it.
 - The **"Log in or sign up for X" box** at the top of the right-hand column.
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.
@@ -222,6 +226,9 @@ utility classes, Base UI dialogs, **no** `data-testid` attributes, no
 - engagement modal: `div[data-engagement-modal]` (no `role="dialog"`),
   shown by X's click handler on posts; posts are `div[role="link"][data-href]`
   cards whose date is an `a[href*="/status/"]`;
+- photos: `div[inert] > img` with an empty sibling
+  `a[aria-label="View media"][href$="/photo/<n>"]` laid over it; the
+  full-size image is the same `pbs.twimg.com` URL with `name=4096x4096`;
 - sidebar login box: the `aside section` holding the
   `/onboarding/…?mode=signup` link;
 - poisoned mobile links: `a[href*="launch_app_store"]` and `https://m.x.com/…`

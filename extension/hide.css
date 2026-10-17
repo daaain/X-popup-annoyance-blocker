@@ -68,6 +68,29 @@ iframe[src*="accounts.google.com/gsi/"] {
   opacity: 1;
 }
 
+/* The extension's own full-size photo viewer (see showPhoto in content.js).
+   Explicit sizes on the <img>: X's own CSS styles every img. */
+.xpab-photo {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 90%);
+  cursor: zoom-out;
+  outline: none;
+  overscroll-behavior: contain;
+}
+.xpab-photo > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 /* ------------------------------------------------------------------------
    Scroll unlock.
 

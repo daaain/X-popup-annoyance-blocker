@@ -6,7 +6,8 @@
 //    Base UI dialogs, no #react-root). Annoyances: a "Continue to X" content
 //    wall, a "Scan to get the app" QR popup, a login modal, a cookie banner,
 //    clicks on posts hijacked to show a "Don't miss what's happening"
-//    engagement modal, and on mobile a "Get the full app experience"
+//    engagement modal, photos that link to a page that is just the post
+//    again, and on mobile a "Get the full app experience"
 //    app-store obstruction plus tweet links rewritten to bounce into the app
 //    store.
 //  - The classic React app (#react-root, data-testid) when logged in.
@@ -281,7 +282,8 @@
   //  - opening a profile fetches its timeline from an API that returns 404,
   //    leaving "Something went wrong" instead of posts.
   // So open these ourselves, as a normal page load, before X's handlers see
-  // the click. Buttons (Like, Reply, ...), media and other links are left to X.
+  // the click. Buttons (Like, Reply, ...), media and other links are left to X
+  // (photos have their own overlay, see openPhoto).
   const POST_PATH_RE = /^\/[^/]+\/status\/\d+/;
   const PROFILE_PATH_RE = /^\/[A-Za-z0-9_]{1,15}\/?$/; // X handles: up to 15 word characters
   const CLICKABLE_SELECTOR =
@@ -313,6 +315,83 @@
     e.preventDefault();
     e.stopImmediatePropagation();
     location.assign(url.href);
+  }
+
+  // --------------------------------------------------------------- photos —
+  // A photo in a post is an <img> (in an inert wrapper) with an empty
+  // "View media" link laid over it, pointing at /<user>/status/<id>/photo/<n>.
+  // Logged out, that page is just the post again, so show the image in an
+  // overlay of our own instead: one click opens it, another anywhere closes it.
+  const PHOTO_PATH_RE = /^\/[^/]+\/status\/\d+\/photo\/\d+\/?$/;
+  let photoOverlay = null;
+
+  // pbs.twimg.com picks the size from the `name` param; 4096x4096 is the
+  // largest it serves in any format ('orig' only exists in the upload's own).
+  function fullSizeUrl(src) {
+    try {
+      const url = new URL(src);
+      if (url.hostname !== 'pbs.twimg.com' || !url.searchParams.has('name')) return src;
+      url.searchParams.set('name', '4096x4096');
+      return url.href;
+    } catch {
+      return src;
+    }
+  }
+
+  function closePhoto() {
+    if (!photoOverlay) return;
+    photoOverlay.remove();
+    photoOverlay = null;
+    document.removeEventListener('keydown', closePhotoOnEscape, true);
+  }
+
+  function closePhotoOnEscape(e) {
+    if (e.key !== 'Escape') return;
+    e.stopImmediatePropagation();
+    closePhoto();
+  }
+
+  function showPhoto(thumb) {
+    closePhoto();
+    const shown = thumb.currentSrc || thumb.src;
+    photoOverlay = document.createElement('div');
+    photoOverlay.className = 'xpab-photo';
+    photoOverlay.tabIndex = -1;
+    const img = document.createElement('img');
+    img.alt = thumb.alt;
+    img.src = shown; // already loaded: shows at once, then swaps to full size
+    photoOverlay.appendChild(img);
+    const full = fullSizeUrl(shown);
+    if (full !== shown) {
+      const loader = new Image();
+      loader.onload = () => { img.src = full; };
+      loader.src = full;
+    }
+    photoOverlay.addEventListener('click', closePhoto);
+    document.addEventListener('keydown', closePhotoOnEscape, true);
+    document.body.appendChild(photoOverlay);
+    photoOverlay.focus();
+  }
+
+  function openPhoto(e) {
+    if (!e.isTrusted || e.defaultPrevented || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (!isJetfuelPage() || !(e.target instanceof Element)) return;
+    const link = e.target.closest('a[href]');
+    if (!link) return;
+    let url;
+    try {
+      url = new URL(link.getAttribute('href'), location.href);
+    } catch {
+      return;
+    }
+    if (url.origin !== location.origin || !PHOTO_PATH_RE.test(url.pathname)) return;
+    const thumb = link.parentElement && link.parentElement.querySelector('img');
+    if (!thumb || !(thumb.currentSrc || thumb.src)) return;
+    log('showing photo', url.pathname);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    showPhoto(thumb);
   }
 
   // --------------------------------------------------------------- notice —
@@ -361,7 +440,7 @@
   function removeBackdrops() {
     if (!document.body) return;
     for (const child of [...document.body.children]) {
-      if (child.querySelector('[role="dialog"]')) continue;
+      if (child === photoOverlay || child.querySelector('[role="dialog"]')) continue;
       const s = getComputedStyle(child);
       if (s.position !== 'fixed' || s.display === 'none') continue;
       const r = child.getBoundingClientRect();
@@ -568,7 +647,8 @@
     document.addEventListener(type, guardTap, true);
   }
   // On window, in the capture phase: the earliest point any page script can
-  // see the click.
+  // see the click. Photos first: their links are under /status/ too.
+  window.addEventListener('click', openPhoto, true);
   window.addEventListener('click', openPageDirectly, true);
 
   // X's modals also lock scrolling in JS: while one is mounted, a page-wide

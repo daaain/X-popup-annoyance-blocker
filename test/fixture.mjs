@@ -3,7 +3,8 @@
 // applied via utility class and via position:fixed, the app-store obstruction
 // modal, tweet links whose own onclick navigates to the app store, and the
 // logged-out engagement modal X shows instead of opening a clicked post, and
-// X's in-page navigation to a profile, which fails when logged out.
+// X's in-page navigation to a profile, which fails when logged out, and a
+// photo whose "View media" link leads to a page that is just the post again.
 export const FIXTURE_HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -40,6 +41,16 @@ export const FIXTURE_HTML = `<!doctype html>
       <a id="reply-date" href="/someone/status/456">27 Sept</a>
       <p id="reply-body">A reply worth reading</p>
       <button id="reply-like" type="button" aria-label="Like">Like</button>
+    </div>
+    <!-- A photo in a post, as X marks it up: an inert image with an empty
+         link laid over it. -->
+    <div id="photo" style="position:relative;width:300px;height:150px">
+      <div inert style="width:100%;height:100%">
+        <img id="photo-thumb" alt="A chart" style="width:100%;height:100%"
+             src="https://pbs.twimg.com/media/FIXTURE?format=webp&amp;name=small">
+      </div>
+      <a id="photo-link" aria-label="View media" style="position:absolute;inset:0;z-index:10"
+         href="/someone/status/789/photo/1"></a>
     </div>
   </div>
 

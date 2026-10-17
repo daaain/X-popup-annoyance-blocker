@@ -14,6 +14,11 @@ import { mkdir } from 'node:fs/promises';
 
 const MOBILE_UA =
   'Mozilla/5.0 (Android 15; Mobile; rv:142.0) Gecko/142.0 Firefox/142.0';
+// 1x1 pixel, served for every pbs.twimg.com image.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64'
+);
 const contentJs = readFileSync(path.join(EXTENSION_DIR, 'content.js'), 'utf8');
 const hideCss = readFileSync(path.join(EXTENSION_DIR, 'hide.css'), 'utf8');
 
@@ -71,7 +76,9 @@ async function openPage(engine) {
 async function run(engine) {
   const { ctx, page, browser } = await openPage(engine);
   await page.route('**/*', (route) =>
-    route.fulfill({ contentType: 'text/html', body: FIXTURE_HTML })
+    new URL(route.request().url()).hostname === 'pbs.twimg.com'
+      ? route.fulfill({ contentType: 'image/png', body: PNG })
+      : route.fulfill({ contentType: 'text/html', body: FIXTURE_HTML })
   );
   await page.goto('https://x.com/fixture', { timeout: 30000 });
 
@@ -194,6 +201,35 @@ async function run(engine) {
   check(engine, 'notice explains the login-only click', /account/i.test(engagement.notice ?? ''),
     String(engagement.notice));
   check(engine, 'Like click does not navigate', new URL(page.url()).pathname === '/fixture', page.url());
+
+  // Clicking a photo shows it full size in our overlay instead of loading a
+  // page that is just the post again; another click closes it.
+  await page.goto('https://x.com/fixture', { timeout: 30000 });
+  await page.waitForTimeout(2000);
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.waitForTimeout(1500); // a couple of heal() passes must not remove it
+  const photo = await page.evaluate(() => {
+    const img = document.querySelector('.xpab-photo > img');
+    const r = img?.parentElement.getBoundingClientRect();
+    return {
+      src: img?.getAttribute('src') ?? null,
+      alt: img?.alt ?? null,
+      width: r ? Math.round(r.width) : 0,
+      path: location.pathname,
+    };
+  });
+  check(engine, 'photo click opens the overlay without leaving the page',
+    photo.path === '/fixture' && /name=4096x4096/.test(photo.src ?? '') && photo.alt === 'A chart',
+    JSON.stringify(photo));
+  check(engine, 'photo overlay covers the viewport', photo.width >= 412, `width=${photo.width}`);
+  await page.mouse.click(20, 20);
+  await page.waitForTimeout(300);
+  const closed = await page.evaluate(() => !document.querySelector('.xpab-photo'));
+  check(engine, 'click anywhere closes the photo', closed && new URL(page.url()).pathname === '/fixture');
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  check(engine, 'Escape closes the photo', await page.evaluate(() => !document.querySelector('.xpab-photo')));
 
   await page.screenshot({ path: path.join(ARTIFACTS, `synthetic-${engine}.png`) });
   await ctx.close();
