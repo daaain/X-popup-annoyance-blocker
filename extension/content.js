@@ -322,8 +322,12 @@
   // "View media" link laid over it, pointing at /<user>/status/<id>/photo/<n>.
   // Logged out, that page is just the post again, so show the image in an
   // overlay of our own instead: one click opens it, another anywhere closes it.
-  const PHOTO_PATH_RE = /^\/[^/]+\/status\/\d+\/photo\/\d+\/?$/;
+  // A post with several photos (a carousel of such cells) can be paged through
+  // with the arrow buttons, the arrow keys or a swipe.
+  const PHOTO_PATH_RE = /^\/[^/]+\/status\/(\d+)\/photo\/(\d+)\/?$/;
+  const SWIPE_PX = 50;
   let photoOverlay = null;
+  let photoStep = null;
 
   // pbs.twimg.com picks the size from the `name` param; 4096x4096 is the
   // largest it serves in any format ('orig' only exists in the upload's own).
@@ -338,39 +342,119 @@
     }
   }
 
+  function photoLinkInfo(link) {
+    let url;
+    try {
+      url = new URL(link.getAttribute('href'), location.href);
+    } catch {
+      return null;
+    }
+    const m = url.origin === location.origin && PHOTO_PATH_RE.exec(url.pathname);
+    if (!m) return null;
+    const thumb = link.parentElement && link.parentElement.querySelector('img');
+    const src = thumb && (thumb.currentSrc || thumb.src); // lazy images still have src
+    return src ? { statusId: m[1], n: Number(m[2]), src, alt: thumb.alt } : null;
+  }
+
+  // Every photo of the post, in order. The page can render a post more than
+  // once (e.g. for different layouts), so keep one per photo number.
+  function photosOfPost(statusId) {
+    const byNumber = new Map();
+    for (const link of document.querySelectorAll(`a[href*="/status/${statusId}/photo/"]`)) {
+      const info = photoLinkInfo(link);
+      if (info && info.statusId === statusId && !byNumber.has(info.n)) byNumber.set(info.n, info);
+    }
+    return [...byNumber.values()].sort((a, b) => a.n - b.n);
+  }
+
   function closePhoto() {
     if (!photoOverlay) return;
     photoOverlay.remove();
     photoOverlay = null;
-    document.removeEventListener('keydown', closePhotoOnEscape, true);
+    photoStep = null;
+    document.removeEventListener('keydown', photoKeys, true);
   }
 
-  function closePhotoOnEscape(e) {
-    if (e.key !== 'Escape') return;
+  function photoKeys(e) {
+    const step = { Escape: 0, ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (step === undefined) return;
     e.stopImmediatePropagation();
-    closePhoto();
+    e.preventDefault();
+    if (step) photoStep(step);
+    else closePhoto();
   }
 
-  function showPhoto(thumb) {
+  function photoButton(label, text, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('aria-label', label);
+    button.textContent = text;
+    button.addEventListener('click', (e) => {
+      e.stopPropagation(); // a click anywhere else closes the overlay
+      onClick();
+    });
+    return button;
+  }
+
+  function showPhotos(photos, start) {
     closePhoto();
-    const shown = thumb.currentSrc || thumb.src;
-    photoOverlay = document.createElement('div');
-    photoOverlay.className = 'xpab-photo';
-    photoOverlay.tabIndex = -1;
+    let index = start;
+    const overlay = (photoOverlay = document.createElement('div'));
+    overlay.className = 'xpab-photo';
+    overlay.tabIndex = -1;
     const img = document.createElement('img');
-    img.alt = thumb.alt;
-    img.src = shown; // already loaded: shows at once, then swaps to full size
-    photoOverlay.appendChild(img);
-    const full = fullSizeUrl(shown);
-    if (full !== shown) {
-      const loader = new Image();
-      loader.onload = () => { img.src = full; };
-      loader.src = full;
+    overlay.appendChild(img);
+
+    const multiple = photos.length > 1;
+    const prev = photoButton('Previous photo', '‹', () => step(-1));
+    const next = photoButton('Next photo', '›', () => step(1));
+    const counter = document.createElement('div');
+    prev.className = 'xpab-photo-prev';
+    next.className = 'xpab-photo-next';
+    counter.className = 'xpab-photo-counter';
+    if (multiple) overlay.append(prev, next, counter);
+
+    function show() {
+      const photo = photos[index];
+      img.alt = photo.alt;
+      img.src = photo.src; // usually already loaded: shows at once, then swaps to full size
+      const full = fullSizeUrl(photo.src);
+      if (full !== photo.src) {
+        const loader = new Image();
+        loader.onload = () => {
+          if (photos[index] === photo) img.src = full;
+        };
+        loader.src = full;
+      }
+      prev.hidden = index === 0;
+      next.hidden = index === photos.length - 1;
+      counter.textContent = `${index + 1} / ${photos.length}`;
     }
-    photoOverlay.addEventListener('click', closePhoto);
-    document.addEventListener('keydown', closePhotoOnEscape, true);
-    document.body.appendChild(photoOverlay);
-    photoOverlay.focus();
+    function step(delta) {
+      const to = index + delta;
+      if (to < 0 || to >= photos.length) return;
+      index = to;
+      show();
+    }
+    photoStep = step;
+
+    let touch = null;
+    overlay.addEventListener('touchstart', (e) => {
+      touch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+    }, { passive: true });
+    overlay.addEventListener('touchend', (e) => {
+      if (!touch || !multiple) return;
+      const dx = e.changedTouches[0].clientX - touch.x;
+      const dy = e.changedTouches[0].clientY - touch.y;
+      touch = null;
+      if (Math.abs(dx) >= SWIPE_PX && Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
+    });
+
+    overlay.addEventListener('click', closePhoto);
+    document.addEventListener('keydown', photoKeys, true);
+    show();
+    document.body.appendChild(overlay);
+    overlay.focus();
   }
 
   function openPhoto(e) {
@@ -378,20 +462,16 @@
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (!isJetfuelPage() || !(e.target instanceof Element)) return;
     const link = e.target.closest('a[href]');
-    if (!link) return;
-    let url;
-    try {
-      url = new URL(link.getAttribute('href'), location.href);
-    } catch {
-      return;
-    }
-    if (url.origin !== location.origin || !PHOTO_PATH_RE.test(url.pathname)) return;
-    const thumb = link.parentElement && link.parentElement.querySelector('img');
-    if (!thumb || !(thumb.currentSrc || thumb.src)) return;
-    log('showing photo', url.pathname);
+    const clicked = link && photoLinkInfo(link);
+    if (!clicked) return;
+    const photos = photosOfPost(clicked.statusId);
+    const start = photos.findIndex((p) => p.n === clicked.n);
+    if (start === -1) return;
+    photos[start] = clicked; // the copy actually clicked
+    log('showing photo', clicked.n, 'of', photos.length);
     e.preventDefault();
     e.stopImmediatePropagation();
-    showPhoto(thumb);
+    showPhotos(photos, start);
   }
 
   // --------------------------------------------------------------- notice —

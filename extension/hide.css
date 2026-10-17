@@ -90,6 +90,42 @@ iframe[src*="accounts.google.com/gsi/"] {
   max-height: 100%;
   object-fit: contain;
 }
+/* Previous / next, for posts with several photos. */
+.xpab-photo > button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  padding: 0 0 4px;
+  border: 0;
+  border-radius: 9999px;
+  background: rgb(15 20 25 / 75%);
+  color: #fff;
+  font: 32px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.xpab-photo > button[hidden] {
+  display: none;
+}
+.xpab-photo-prev {
+  left: 12px;
+}
+.xpab-photo-next {
+  right: 12px;
+}
+.xpab-photo-counter {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgb(15 20 25 / 75%);
+  color: #fff;
+  font: 14px/20px system-ui, sans-serif;
+  pointer-events: none;
+}
 
 /* ------------------------------------------------------------------------
    Scroll unlock.

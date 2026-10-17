@@ -231,6 +231,53 @@ async function run(engine) {
   await page.waitForTimeout(300);
   check(engine, 'Escape closes the photo', await page.evaluate(() => !document.querySelector('.xpab-photo')));
 
+  // A post with several photos can be paged through.
+  const viewer = () => page.evaluate(() => {
+    const o = document.querySelector('.xpab-photo');
+    const visible = (sel) => !!o?.querySelector(sel) && o.querySelector(sel).getClientRects().length > 0;
+    return o && {
+      src: o.querySelector('img').getAttribute('src').replace(/^.*media\/|\?.*$/g, ''),
+      counter: o.querySelector('.xpab-photo-counter')?.textContent ?? null,
+      prev: visible('.xpab-photo-prev'),
+      next: visible('.xpab-photo-next'),
+    };
+  });
+  await page.click('#photo-link', { timeout: 5000 });
+  const single = await viewer();
+  check(engine, 'single photo has no paging controls', !single.counter && !single.prev && !single.next,
+    JSON.stringify(single));
+  await page.keyboard.press('Escape');
+  await page.click('#multi-2', { timeout: 5000 });
+  const second = await viewer();
+  check(engine, 'multi-photo post opens on the clicked photo',
+    second?.src === 'MULTI2' && second.counter === '2 / 3' && second.prev && second.next, JSON.stringify(second));
+  await page.click('.xpab-photo-next');
+  const third = await viewer();
+  check(engine, 'next button pages forward and stays open',
+    third?.src === 'MULTI3' && third.counter === '3 / 3' && !third.next, JSON.stringify(third));
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  const first = await viewer();
+  check(engine, 'arrow keys page back', first?.src === 'MULTI1' && !first.prev, JSON.stringify(first));
+  if (engine === 'chromium') {
+    // Swipe left with a real (CDP) touch sequence.
+    const cdp = await ctx.newCDPSession(page);
+    const touch = (type, x) => cdp.send('Input.dispatchTouchEvent', {
+      type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: 450 }],
+    });
+    await touch('touchStart', 300);
+    await touch('touchMove', 200);
+    await touch('touchMove', 100);
+    await touch('touchEnd');
+    await page.waitForTimeout(300);
+    const swiped = await viewer();
+    check(engine, 'swipe pages forward', swiped?.src === 'MULTI2', JSON.stringify(swiped));
+  }
+  await page.mouse.click(200, 30);
+  await page.waitForTimeout(300);
+  check(engine, 'click outside the buttons closes a multi-photo viewer',
+    await page.evaluate(() => !document.querySelector('.xpab-photo')));
+
   await page.screenshot({ path: path.join(ARTIFACTS, `synthetic-${engine}.png`) });
   await ctx.close();
   if (browser) await browser.close();

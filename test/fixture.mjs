@@ -52,6 +52,32 @@ export const FIXTURE_HTML = `<!doctype html>
       <a id="photo-link" aria-label="View media" style="position:absolute;inset:0;z-index:10"
          href="/someone/status/789/photo/1"></a>
     </div>
+    <!-- A post with several photos: a carousel of the same cells. X also
+         renders some posts twice; the hidden copy must not add photos. -->
+    <div id="multi" style="display:flex;gap:4px;overflow-x:auto">
+      <div style="position:relative;width:120px;height:90px;flex:none">
+        <div inert style="width:100%;height:100%"><img alt="Photo 1" style="width:100%;height:100%"
+             src="https://pbs.twimg.com/media/MULTI1?format=webp&amp;name=small"></div>
+        <a id="multi-1" aria-label="View media" style="position:absolute;inset:0;z-index:10"
+           href="/someone/status/790/photo/1"></a>
+      </div>
+      <div style="position:relative;width:120px;height:90px;flex:none">
+        <div inert style="width:100%;height:100%"><img alt="Photo 2" style="width:100%;height:100%"
+             src="https://pbs.twimg.com/media/MULTI2?format=webp&amp;name=small"></div>
+        <a id="multi-2" aria-label="View media" style="position:absolute;inset:0;z-index:10"
+           href="/someone/status/790/photo/2"></a>
+      </div>
+      <div style="position:relative;width:120px;height:90px;flex:none">
+        <div inert style="width:100%;height:100%"><img alt="Photo 3" style="width:100%;height:100%"
+             src="https://pbs.twimg.com/media/MULTI3?format=webp&amp;name=small"></div>
+        <a id="multi-3" aria-label="View media" style="position:absolute;inset:0;z-index:10"
+           href="/someone/status/790/photo/3"></a>
+      </div>
+    </div>
+    <div hidden>
+      <div><div inert><img src="https://pbs.twimg.com/media/MULTI2?format=webp&amp;name=small"></div>
+        <a aria-label="View media" href="/someone/status/790/photo/2"></a></div>
+    </div>
   </div>
 
   <!-- EU cookie banner (not a dialog; a fixed bottom sheet) -->

@@ -57,7 +57,8 @@ x.com currently serves two different frontends, and the extension handles both:
 - **Photos that "open" the same post again**: a photo's link leads to a
   `…/photo/1` page that, logged out, is just the post. Clicking a photo
   shows it full size in an overlay instead; click anywhere (or press Escape)
-  to close it.
+  to close it. Posts with several photos can be paged through with the
+  ‹ › buttons, the arrow keys or a swipe.
 - The **"Log in or sign up for X" box** at the top of the right-hand column.
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.
@@ -227,7 +228,8 @@ utility classes, Base UI dialogs, **no** `data-testid` attributes, no
   shown by X's click handler on posts; posts are `div[role="link"][data-href]`
   cards whose date is an `a[href*="/status/"]`;
 - photos: `div[inert] > img` with an empty sibling
-  `a[aria-label="View media"][href$="/photo/<n>"]` laid over it; the
+  `a[aria-label="View media"][href$="/photo/<n>"]` laid over it (several
+  photos are a horizontal carousel of such cells, one per `<n>`); the
   full-size image is the same `pbs.twimg.com` URL with `name=4096x4096`;
 - sidebar login box: the `aside section` holding the
   `/onboarding/…?mode=signup` link;
