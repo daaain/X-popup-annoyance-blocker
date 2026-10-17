@@ -278,6 +278,52 @@ async function run(engine) {
   check(engine, 'click outside the buttons closes a multi-photo viewer',
     await page.evaluate(() => !document.querySelector('.xpab-photo')));
 
+  // Back closes the photo overlay without leaving the page, and X's router
+  // never sees the overlay's history entry.
+  const historyIndex = () => page.evaluate(() => window.navigation?.currentEntry?.index ?? null);
+  const indexBefore = await historyIndex();
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(500);
+  const back = await page.evaluate(() => ({
+    open: !!document.querySelector('.xpab-photo'),
+    path: location.pathname,
+    popstates: window.__fixture.popstates,
+  }));
+  check(engine, 'Back closes the photo and stays on the page',
+    !back.open && back.path === '/fixture' && back.popstates === 0, JSON.stringify(back));
+  // Closing it with a click takes its history entry away too.
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.mouse.click(200, 30);
+  await page.waitForTimeout(500);
+  const indexAfter = await historyIndex();
+  check(engine, 'closing the photo leaves no history entry behind',
+    indexAfter === indexBefore && (await page.evaluate(() => window.__fixture.popstates)) === 0,
+    `index ${indexBefore} -> ${indexAfter}`);
+
+  // The video player's Full screen and Picture-in-Picture buttons work
+  // instead of loading the video's page.
+  await page.click('#video-fullscreen', { timeout: 5000 });
+  await page.waitForTimeout(500);
+  const fullscreen = await page.evaluate(() => ({
+    element: document.fullscreenElement?.id ?? null,
+    path: location.pathname,
+  }));
+  check(engine, 'Full screen button makes the player full screen',
+    fullscreen.element === 'player' && fullscreen.path === '/fixture', JSON.stringify(fullscreen));
+  await page.click('#video-fullscreen', { timeout: 5000 });
+  await page.waitForTimeout(500);
+  check(engine, 'Full screen button again leaves full screen',
+    await page.evaluate(() => !document.fullscreenElement && location.pathname === '/fixture'));
+  await page.click('#video-pip', { timeout: 5000 });
+  await page.waitForTimeout(500);
+  const pip = await page.evaluate(() => ({
+    path: location.pathname,
+    disabled: document.querySelector('video').hasAttribute('disablepictureinpicture'),
+  }));
+  check(engine, 'Picture-in-Picture button stays on the page and re-enables PiP',
+    pip.path === '/fixture' && !pip.disabled, JSON.stringify(pip));
+
   await page.screenshot({ path: path.join(ARTIFACTS, `synthetic-${engine}.png`) });
   await ctx.close();
   if (browser) await browser.close();

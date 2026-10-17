@@ -57,8 +57,14 @@ x.com currently serves two different frontends, and the extension handles both:
 - **Photos that "open" the same post again**: a photo's link leads to a
   `…/photo/1` page that, logged out, is just the post. Clicking a photo
   shows it full size in an overlay instead; click anywhere (or press Escape)
-  to close it. Posts with several photos can be paged through with the
-  ‹ › buttons, the arrow keys or a swipe.
+  to close it, and Back closes it too. Posts with several photos can be
+  paged through with the ‹ › buttons, the arrow keys or a swipe.
+- **Video Full screen and Picture-in-Picture buttons that reload the post**:
+  they are inert, under links to the same `…/video/1` page. The extension
+  does what they say instead: Full screen takes the whole player (so X's own
+  controls keep working) and Picture-in-Picture uses the browser's API.
+  Firefox has no such API, so there a notice points to its own
+  picture-in-picture control.
 - The **"Log in or sign up for X" box** at the top of the right-hand column.
 - Cookie banners are answered with **"Refuse non-essential cookies"** where
   that button exists, so the choice persists.
@@ -195,7 +201,9 @@ and drives the real, logged-out x.com. It asserts that:
 x.com-shaped page reproducing the failure modes the live site won't show a US
 test runner: the EU cookie banner, a scroll lock applied by utility *class*,
 the `position: fixed` body lock, an SPA that re-applies the lock every 700 ms,
-and a tweet link whose own `onclick` navigates to the app store. It runs in
+a tweet link whose own `onclick` navigates to the app store, and photos
+and video controls that link to a page that is just the post again
+(including Back closing the photo overlay without X's router noticing). It runs in
 **both Chromium and Firefox** (Gecko matters: the phone runs Firefox, and only
 Chromium had ever been tested). Playwright cannot install extensions into
 Firefox, so there the content script and stylesheet are injected at
@@ -231,6 +239,10 @@ utility classes, Base UI dialogs, **no** `data-testid` attributes, no
   `a[aria-label="View media"][href$="/photo/<n>"]` laid over it (several
   photos are a horizontal carousel of such cells, one per `<n>`); the
   full-size image is the same `pbs.twimg.com` URL with `name=4096x4096`;
+- video controls: the same pattern, an inert `button` under
+  `a[href$="/video/<n>"]`, told apart by icon (`data-icon="icon-media-expand"`,
+  `icon-media-collapse` while full screen, and `icon-media-dock` for
+  Picture-in-Picture); X also sets `disablePictureInPicture` on the `<video>`;
 - sidebar login box: the `aside section` holding the
   `/onboarding/…?mode=signup` link;
 - poisoned mobile links: `a[href*="launch_app_store"]` and `https://m.x.com/…`

@@ -4,7 +4,8 @@
 // modal, tweet links whose own onclick navigates to the app store, and the
 // logged-out engagement modal X shows instead of opening a clicked post, and
 // X's in-page navigation to a profile, which fails when logged out, and a
-// photo whose "View media" link leads to a page that is just the post again.
+// photo whose "View media" link leads to a page that is just the post again,
+// as do a video player's Picture-in-Picture and Full screen buttons.
 export const FIXTURE_HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -78,6 +79,23 @@ export const FIXTURE_HTML = `<!doctype html>
       <div><div inert><img src="https://pbs.twimg.com/media/MULTI2?format=webp&amp;name=small"></div>
         <a aria-label="View media" href="/someone/status/790/photo/2"></a></div>
     </div>
+    <!-- A video player: X's own controls, with PiP and Full screen as inert
+         buttons under links to the video's page. -->
+    <div id="player" style="position:relative;width:320px;height:180px;background:#000">
+      <video disablepictureinpicture playsinline muted style="width:100%;height:100%"></video>
+      <div style="position:absolute;bottom:0;right:0;display:flex;gap:8px">
+        <div style="position:relative;display:flex">
+          <div inert><button type="button" aria-label="Picture-in-Picture"><svg data-icon="icon-media-dock" width="20" height="20"></svg></button></div>
+          <a id="video-pip" aria-label="Picture-in-Picture" style="position:absolute;inset:0;z-index:10"
+             href="/someone/status/791/video/1"></a>
+        </div>
+        <div style="position:relative;display:flex">
+          <div inert><button type="button" aria-label="Full screen"><svg data-icon="icon-media-expand" width="20" height="20"></svg></button></div>
+          <a id="video-fullscreen" aria-label="Full screen" style="position:absolute;inset:0;z-index:10"
+             href="/someone/status/791/video/1"></a>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- EU cookie banner (not a dialog; a fixed bottom sheet) -->
@@ -88,7 +106,16 @@ export const FIXTURE_HTML = `<!doctype html>
   </div>
 
 <script>
-  window.__fixture = { refuseClicked: false, appNavigations: [], engagementModals: 0, inPageNavigations: 0 };
+  window.__fixture = { refuseClicked: false, appNavigations: [], engagementModals: 0, inPageNavigations: 0, popstates: 0 };
+
+  // X swaps the Full screen icon while the player is full screen.
+  document.addEventListener('fullscreenchange', () => {
+    document.querySelector('#video-fullscreen').parentElement.querySelector('svg')
+      .setAttribute('data-icon', document.fullscreenElement ? 'icon-media-collapse' : 'icon-media-expand');
+  });
+
+  // X's client-side router, which must not see the photo overlay's history entry.
+  window.addEventListener('popstate', () => window.__fixture.popstates++);
 
   // X navigates to profiles inside the page; logged out, the profile's
   // timeline then fails to load ("Something went wrong").
