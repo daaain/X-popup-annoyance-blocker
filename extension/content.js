@@ -6,7 +6,8 @@
 //    Base UI dialogs, no #react-root). Annoyances: a "Continue to X" content
 //    wall, a "Scan to get the app" QR popup, a login modal, a cookie banner,
 //    clicks on posts hijacked to show a "Don't miss what's happening"
-//    engagement modal, and on mobile a "Get the full app experience"
+//    engagement modal, photos and video controls that link to a page that is
+//    just the post again, and on mobile a "Get the full app experience"
 //    app-store obstruction plus tweet links rewritten to bounce into the app
 //    store.
 //  - The classic React app (#react-root, data-testid) when logged in.
@@ -281,7 +282,8 @@
   //  - opening a profile fetches its timeline from an API that returns 404,
   //    leaving "Something went wrong" instead of posts.
   // So open these ourselves, as a normal page load, before X's handlers see
-  // the click. Buttons (Like, Reply, ...), media and other links are left to X.
+  // the click. Buttons (Like, Reply, ...), media and other links are left to X
+  // (photos and video controls are handled by openPhoto and videoControl).
   const POST_PATH_RE = /^\/[^/]+\/status\/\d+/;
   const PROFILE_PATH_RE = /^\/[A-Za-z0-9_]{1,15}\/?$/; // X handles: up to 15 word characters
   const CLICKABLE_SELECTOR =
@@ -302,10 +304,16 @@
     return POST_PATH_RE.test(url.pathname) || PROFILE_PATH_RE.test(url.pathname) ? url : null;
   }
 
+  // A plain left click on the logged-out page: the only clicks we take over.
+  // With a modifier (new tab etc.) the browser's default is left alone.
+  function plainClick(e) {
+    return e.isTrusted && !e.defaultPrevented && e.button === 0 &&
+      !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) &&
+      isJetfuelPage() && e.target instanceof Element;
+  }
+
   function openPageDirectly(e) {
-    if (!e.isTrusted || e.defaultPrevented || e.button !== 0) return;
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // new tab etc.: browser default
-    if (!isJetfuelPage() || !(e.target instanceof Element)) return;
+    if (!plainClick(e)) return;
     if (!window.getSelection().isCollapsed) return; // the user was selecting text
     const url = pageUrlFor(e.target);
     if (!url || url.pathname === location.pathname) return;
@@ -313,6 +321,234 @@
     e.preventDefault();
     e.stopImmediatePropagation();
     location.assign(url.href);
+  }
+
+  // --------------------------------------------------------------- photos —
+  // A photo in a post is an <img> (in an inert wrapper) with an empty
+  // "View media" link laid over it, pointing at /<user>/status/<id>/photo/<n>.
+  // Logged out, that page is just the post again, so show the image in an
+  // overlay of our own instead: one click opens it, another anywhere closes it.
+  // A post with several photos (a carousel of such cells) can be paged through
+  // with the arrow buttons, the arrow keys or a swipe.
+  //
+  // Back closes the overlay rather than leaving the page: opening it adds a
+  // history entry for the same URL, and the popstate that removes it again is
+  // stopped before X's router can react to it.
+  const PHOTO_PATH_RE = /^\/[^/]+\/status\/(\d+)\/photo\/(\d+)\/?$/;
+  const SWIPE_PX = 50;
+  let photoOverlay = null;
+  let photoStep = null;
+  let photoHistoryEntry = false;
+
+  // pbs.twimg.com picks the size from the `name` param; 4096x4096 is the
+  // largest it serves in any format ('orig' only exists in the upload's own).
+  function fullSizeUrl(src) {
+    try {
+      const url = new URL(src);
+      if (url.hostname !== 'pbs.twimg.com' || !url.searchParams.has('name')) return src;
+      url.searchParams.set('name', '4096x4096');
+      return url.href;
+    } catch {
+      return src;
+    }
+  }
+
+  function photoLinkInfo(link) {
+    let url;
+    try {
+      url = new URL(link.getAttribute('href'), location.href);
+    } catch {
+      return null;
+    }
+    const m = url.origin === location.origin && PHOTO_PATH_RE.exec(url.pathname);
+    if (!m) return null;
+    const thumb = link.parentElement && link.parentElement.querySelector('img');
+    const src = thumb && (thumb.currentSrc || thumb.src); // lazy images still have src
+    return src ? { statusId: m[1], n: Number(m[2]), src, alt: thumb.alt } : null;
+  }
+
+  // Every photo of the post, in order. The page can render a post more than
+  // once (e.g. for different layouts), so keep one per photo number.
+  function photosOfPost(statusId) {
+    const byNumber = new Map();
+    for (const link of document.querySelectorAll(`a[href*="/status/${statusId}/photo/"]`)) {
+      const info = photoLinkInfo(link);
+      if (info && info.statusId === statusId && !byNumber.has(info.n)) byNumber.set(info.n, info);
+    }
+    return [...byNumber.values()].sort((a, b) => a.n - b.n);
+  }
+
+  function closePhoto() {
+    if (!photoOverlay) return;
+    photoOverlay.remove();
+    photoOverlay = null;
+    photoStep = null;
+    document.removeEventListener('keydown', photoKeys, true);
+    if (photoHistoryEntry) history.back(); // its popstate goes to photoBack
+  }
+
+  function photoBack(e) {
+    if (!photoHistoryEntry) return;
+    photoHistoryEntry = false;
+    e.stopImmediatePropagation();
+    closePhoto();
+  }
+
+  function photoKeys(e) {
+    const step = { Escape: 0, ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (step === undefined) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    if (step) photoStep(step);
+    else closePhoto();
+  }
+
+  function photoButton(label, text, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('aria-label', label);
+    button.textContent = text;
+    button.addEventListener('click', (e) => {
+      e.stopPropagation(); // a click anywhere else closes the overlay
+      onClick();
+    });
+    return button;
+  }
+
+  function showPhotos(photos, start) {
+    let index = start;
+    const overlay = (photoOverlay = document.createElement('div'));
+    overlay.className = 'xpab-photo';
+    overlay.tabIndex = -1;
+    const img = document.createElement('img');
+    overlay.appendChild(img);
+
+    const multiple = photos.length > 1;
+    const prev = photoButton('Previous photo', '‹', () => step(-1));
+    const next = photoButton('Next photo', '›', () => step(1));
+    const counter = document.createElement('div');
+    prev.className = 'xpab-photo-prev';
+    next.className = 'xpab-photo-next';
+    counter.className = 'xpab-photo-counter';
+    if (multiple) overlay.append(prev, next, counter);
+
+    function show() {
+      const photo = photos[index];
+      img.alt = photo.alt;
+      img.src = photo.src; // usually already loaded: shows at once, then swaps to full size
+      const full = fullSizeUrl(photo.src);
+      if (full !== photo.src) {
+        const loader = new Image();
+        loader.onload = () => {
+          if (photos[index] === photo) img.src = full;
+        };
+        loader.src = full;
+      }
+      prev.hidden = index === 0;
+      next.hidden = index === photos.length - 1;
+      counter.textContent = `${index + 1} / ${photos.length}`;
+    }
+    function step(delta) {
+      const to = index + delta;
+      if (to < 0 || to >= photos.length) return;
+      index = to;
+      show();
+    }
+    photoStep = step;
+
+    let touch = null;
+    overlay.addEventListener('touchstart', (e) => {
+      touch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+    }, { passive: true });
+    overlay.addEventListener('touchend', (e) => {
+      if (!touch || !multiple) return;
+      const dx = e.changedTouches[0].clientX - touch.x;
+      const dy = e.changedTouches[0].clientY - touch.y;
+      touch = null;
+      if (Math.abs(dx) >= SWIPE_PX && Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
+    });
+
+    overlay.addEventListener('click', closePhoto);
+    document.addEventListener('keydown', photoKeys, true);
+    show();
+    document.body.appendChild(overlay);
+    overlay.focus();
+    history.pushState(history.state, '');
+    photoHistoryEntry = true;
+  }
+
+  function openPhoto(e) {
+    if (!plainClick(e) || photoOverlay) return;
+    const link = e.target.closest('a[href]');
+    const clicked = link && photoLinkInfo(link);
+    if (!clicked) return;
+    const photos = photosOfPost(clicked.statusId);
+    const start = photos.findIndex((p) => p.n === clicked.n);
+    if (start === -1) return;
+    photos[start] = clicked; // the copy actually clicked
+    log('showing photo', clicked.n, 'of', photos.length);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    showPhotos(photos, start);
+  }
+
+  // ------------------------------------------------------- video controls —
+  // The player's Picture-in-Picture and Full screen buttons are inert, each
+  // with an empty link to /<user>/status/<id>/video/<n> laid over it, which
+  // logged out is just the post again. Do what the buttons say instead,
+  // telling them apart by icon rather than by (localised) label. Full screen
+  // takes the whole player, so X's own controls keep working in it.
+  const VIDEO_PATH_RE = /^\/[^/]+\/status\/\d+\/video\/\d+\/?$/;
+  const VIDEO_CONTROL_ICONS = {
+    'icon-media-expand': 'fullscreen',
+    'icon-media-collapse': 'fullscreen', // the same button while full screen
+    'icon-media-dock': 'pip',
+  };
+
+  function toggleFullscreen(player, video) {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else if (player.requestFullscreen) {
+      player.requestFullscreen().catch((err) => log('full screen refused', err));
+    } else if (video.webkitEnterFullscreen) {
+      video.webkitEnterFullscreen(); // iOS Safari: only a <video> can go full screen
+    }
+  }
+
+  function togglePictureInPicture(video) {
+    if (!document.pictureInPictureEnabled) {
+      // Firefox has no API for it, only its own control on the video.
+      showNotice("Use the browser's own picture-in-picture control");
+    } else if (document.pictureInPictureElement === video) {
+      document.exitPictureInPicture();
+    } else {
+      video.disablePictureInPicture = false;
+      video.requestPictureInPicture().catch((err) => log('picture-in-picture refused', err));
+    }
+  }
+
+  function videoControl(e) {
+    if (!plainClick(e)) return;
+    const link = e.target.closest('a[href]');
+    if (!link) return;
+    let url;
+    try {
+      url = new URL(link.getAttribute('href'), location.href);
+    } catch {
+      return;
+    }
+    if (url.origin !== location.origin || !VIDEO_PATH_RE.test(url.pathname)) return;
+    const icon = link.parentElement.querySelector('[data-icon]');
+    const action = icon && VIDEO_CONTROL_ICONS[icon.getAttribute('data-icon')];
+    let player = link.parentElement;
+    while (player && !player.querySelector('video')) player = player.parentElement;
+    if (!action || !player) return;
+    const video = player.querySelector('video');
+    log('video control', action);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (action === 'fullscreen') toggleFullscreen(player, video);
+    else togglePictureInPicture(video);
   }
 
   // --------------------------------------------------------------- notice —
@@ -361,7 +597,7 @@
   function removeBackdrops() {
     if (!document.body) return;
     for (const child of [...document.body.children]) {
-      if (child.querySelector('[role="dialog"]')) continue;
+      if (child === photoOverlay || child.querySelector('[role="dialog"]')) continue;
       const s = getComputedStyle(child);
       if (s.position !== 'fixed' || s.display === 'none') continue;
       const r = child.getBoundingClientRect();
@@ -452,6 +688,12 @@
       log('removing Google one-tap');
       stats.nags++;
       (container || iframe).remove();
+    }
+
+    // X turns off picture-in-picture, which also hides the browser's own
+    // control for it.
+    for (const video of document.querySelectorAll('video[disablepictureinpicture]')) {
+      video.disablePictureInPicture = false;
     }
 
     handleCookieBanner();
@@ -568,8 +810,14 @@
     document.addEventListener(type, guardTap, true);
   }
   // On window, in the capture phase: the earliest point any page script can
-  // see the click.
+  // see the click. Photos and video controls first: their links are under
+  // /status/ too.
+  window.addEventListener('click', openPhoto, true);
+  window.addEventListener('click', videoControl, true);
   window.addEventListener('click', openPageDirectly, true);
+  // Likewise before X's router, which must not see the photo overlay's
+  // history entry go.
+  window.addEventListener('popstate', photoBack, true);
 
   // X's modals also lock scrolling in JS: while one is mounted, a page-wide
   // listener (on document, capture phase) cancels every touchmove and wheel

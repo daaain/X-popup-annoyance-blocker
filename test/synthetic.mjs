@@ -14,6 +14,11 @@ import { mkdir } from 'node:fs/promises';
 
 const MOBILE_UA =
   'Mozilla/5.0 (Android 15; Mobile; rv:142.0) Gecko/142.0 Firefox/142.0';
+// 1x1 pixel, served for every pbs.twimg.com image.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64'
+);
 const contentJs = readFileSync(path.join(EXTENSION_DIR, 'content.js'), 'utf8');
 const hideCss = readFileSync(path.join(EXTENSION_DIR, 'hide.css'), 'utf8');
 
@@ -71,7 +76,9 @@ async function openPage(engine) {
 async function run(engine) {
   const { ctx, page, browser } = await openPage(engine);
   await page.route('**/*', (route) =>
-    route.fulfill({ contentType: 'text/html', body: FIXTURE_HTML })
+    new URL(route.request().url()).hostname === 'pbs.twimg.com'
+      ? route.fulfill({ contentType: 'image/png', body: PNG })
+      : route.fulfill({ contentType: 'text/html', body: FIXTURE_HTML })
   );
   await page.goto('https://x.com/fixture', { timeout: 30000 });
 
@@ -194,6 +201,128 @@ async function run(engine) {
   check(engine, 'notice explains the login-only click', /account/i.test(engagement.notice ?? ''),
     String(engagement.notice));
   check(engine, 'Like click does not navigate', new URL(page.url()).pathname === '/fixture', page.url());
+
+  // Clicking a photo shows it full size in our overlay instead of loading a
+  // page that is just the post again; another click closes it.
+  await page.goto('https://x.com/fixture', { timeout: 30000 });
+  await page.waitForTimeout(2000);
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.waitForTimeout(1500); // a couple of heal() passes must not remove it
+  const photo = await page.evaluate(() => {
+    const img = document.querySelector('.xpab-photo > img');
+    const r = img?.parentElement.getBoundingClientRect();
+    return {
+      src: img?.getAttribute('src') ?? null,
+      alt: img?.alt ?? null,
+      width: r ? Math.round(r.width) : 0,
+      path: location.pathname,
+    };
+  });
+  check(engine, 'photo click opens the overlay without leaving the page',
+    photo.path === '/fixture' && /name=4096x4096/.test(photo.src ?? '') && photo.alt === 'A chart',
+    JSON.stringify(photo));
+  check(engine, 'photo overlay covers the viewport', photo.width >= 412, `width=${photo.width}`);
+  await page.mouse.click(20, 20);
+  await page.waitForTimeout(300);
+  const closed = await page.evaluate(() => !document.querySelector('.xpab-photo'));
+  check(engine, 'click anywhere closes the photo', closed && new URL(page.url()).pathname === '/fixture');
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  check(engine, 'Escape closes the photo', await page.evaluate(() => !document.querySelector('.xpab-photo')));
+
+  // A post with several photos can be paged through.
+  const viewer = () => page.evaluate(() => {
+    const o = document.querySelector('.xpab-photo');
+    const visible = (sel) => !!o?.querySelector(sel) && o.querySelector(sel).getClientRects().length > 0;
+    return o && {
+      src: o.querySelector('img').getAttribute('src').replace(/^.*media\/|\?.*$/g, ''),
+      counter: o.querySelector('.xpab-photo-counter')?.textContent ?? null,
+      prev: visible('.xpab-photo-prev'),
+      next: visible('.xpab-photo-next'),
+    };
+  });
+  await page.click('#photo-link', { timeout: 5000 });
+  const single = await viewer();
+  check(engine, 'single photo has no paging controls', !single.counter && !single.prev && !single.next,
+    JSON.stringify(single));
+  await page.keyboard.press('Escape');
+  await page.click('#multi-2', { timeout: 5000 });
+  const second = await viewer();
+  check(engine, 'multi-photo post opens on the clicked photo',
+    second?.src === 'MULTI2' && second.counter === '2 / 3' && second.prev && second.next, JSON.stringify(second));
+  await page.click('.xpab-photo-next');
+  const third = await viewer();
+  check(engine, 'next button pages forward and stays open',
+    third?.src === 'MULTI3' && third.counter === '3 / 3' && !third.next, JSON.stringify(third));
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  const first = await viewer();
+  check(engine, 'arrow keys page back', first?.src === 'MULTI1' && !first.prev, JSON.stringify(first));
+  if (engine === 'chromium') {
+    // Swipe left with a real (CDP) touch sequence.
+    const cdp = await ctx.newCDPSession(page);
+    const touch = (type, x) => cdp.send('Input.dispatchTouchEvent', {
+      type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: 450 }],
+    });
+    await touch('touchStart', 300);
+    await touch('touchMove', 200);
+    await touch('touchMove', 100);
+    await touch('touchEnd');
+    await page.waitForTimeout(300);
+    const swiped = await viewer();
+    check(engine, 'swipe pages forward', swiped?.src === 'MULTI2', JSON.stringify(swiped));
+  }
+  await page.mouse.click(200, 30);
+  await page.waitForTimeout(300);
+  check(engine, 'click outside the buttons closes a multi-photo viewer',
+    await page.evaluate(() => !document.querySelector('.xpab-photo')));
+
+  // Back closes the photo overlay without leaving the page, and X's router
+  // never sees the overlay's history entry.
+  const historyIndex = () => page.evaluate(() => window.navigation?.currentEntry?.index ?? null);
+  const indexBefore = await historyIndex();
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(500);
+  const back = await page.evaluate(() => ({
+    open: !!document.querySelector('.xpab-photo'),
+    path: location.pathname,
+    popstates: window.__fixture.popstates,
+  }));
+  check(engine, 'Back closes the photo and stays on the page',
+    !back.open && back.path === '/fixture' && back.popstates === 0, JSON.stringify(back));
+  // Closing it with a click takes its history entry away too.
+  await page.click('#photo-link', { timeout: 5000 });
+  await page.mouse.click(200, 30);
+  await page.waitForTimeout(500);
+  const indexAfter = await historyIndex();
+  check(engine, 'closing the photo leaves no history entry behind',
+    indexAfter === indexBefore && (await page.evaluate(() => window.__fixture.popstates)) === 0,
+    `index ${indexBefore} -> ${indexAfter}`);
+
+  // The video player's Full screen and Picture-in-Picture buttons work
+  // instead of loading the video's page.
+  await page.click('#video-fullscreen', { timeout: 5000 });
+  await page.waitForTimeout(500);
+  const fullscreen = await page.evaluate(() => ({
+    element: document.fullscreenElement?.id ?? null,
+    path: location.pathname,
+  }));
+  check(engine, 'Full screen button makes the player full screen',
+    fullscreen.element === 'player' && fullscreen.path === '/fixture', JSON.stringify(fullscreen));
+  await page.click('#video-fullscreen', { timeout: 5000 });
+  await page.waitForTimeout(500);
+  check(engine, 'Full screen button again leaves full screen',
+    await page.evaluate(() => !document.fullscreenElement && location.pathname === '/fixture'));
+  await page.click('#video-pip', { timeout: 5000 });
+  await page.waitForTimeout(500);
+  const pip = await page.evaluate(() => ({
+    path: location.pathname,
+    disabled: document.querySelector('video').hasAttribute('disablepictureinpicture'),
+  }));
+  check(engine, 'Picture-in-Picture button stays on the page and re-enables PiP',
+    pip.path === '/fixture' && !pip.disabled, JSON.stringify(pip));
 
   await page.screenshot({ path: path.join(ARTIFACTS, `synthetic-${engine}.png`) });
   await ctx.close();
